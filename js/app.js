@@ -1,0 +1,687 @@
+/* --- APP ENGINE --- */
+
+function init() {
+    // Initialize Data Store
+    if (typeof initStore === 'function') {
+        initStore();
+        store.pricingModel = 'standard';
+    } else {
+        console.error('Store module not loaded');
+        return;
+    }
+
+    // Initialize UI Elements
+
+    // Render Views
+    renderRoomsTable();
+    renderRatesTable();
+    renderSupplementMatrix();
+    renderMatrix();
+
+    // Update Stats
+    updateStats();
+}
+
+// Stats & Utils
+function updateStats() {
+    if (store) {
+        document.getElementById('stat-plans').innerText = store.rates.length;
+        document.getElementById('stat-rooms').innerText = store.rooms.length;
+    }
+}
+
+function updateDailyBase(dayIndex, val) {
+    store.days[dayIndex].baseRate = parseFloat(val) || 0;
+    saveStore();
+    renderMatrix();
+}
+
+function updateGlobalBase(val) {
+    const rate = parseFloat(val) || 0;
+    store.days.forEach(d => d.baseRate = rate);
+    saveStore();
+    renderMatrix();
+}
+
+function switchView(viewName, element) {
+    // Update Sidebar
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    if (element) {
+        element.classList.add('active');
+    } else {
+        const index = ['dashboard', 'rooms', 'rates', 'matrix'].indexOf(viewName);
+        if (index >= 0) document.querySelectorAll('.nav-item')[index].classList.add('active');
+    }
+
+    // Update user interface
+    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+    document.getElementById(`view-${viewName}`).classList.add('active');
+
+    // Update Title
+    const titles = {
+        dashboard: 'Overview',
+        rooms: 'Room Type Configuration',
+        rates: 'Rate Plan Management',
+        matrix: 'Rate Grid & Inventory'
+    };
+    document.getElementById('pageTitle').innerText = titles[viewName];
+}
+
+/* --- ROOM MANAGMENT --- */
+
+function renderRoomsTable() {
+    const tbody = document.getElementById('roomsTableBody');
+    tbody.innerHTML = '';
+    store.rooms.forEach((room, idx) => {
+        const isBar = room.id === store.barRoomId;
+        const cluster = store.clusters ? store.clusters.find(c => c.id === (room.cluster || 'c1')) : { name: '-' };
+        const clusterName = cluster ? cluster.name : '-';
+        const bgColor = cluster && cluster.color ? cluster.color : '#f1f5f9';
+
+        const tr = document.createElement('tr');
+
+        // BAR Badge / Action
+        let actionHtml = '';
+        if (isBar) {
+            actionHtml = '<span class="badge badge-green">★ BAR Base</span>';
+        } else {
+            actionHtml = `<button class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="setBarRoom('${room.id}')">Set as BAR</button>`;
+        }
+
+        tr.innerHTML = `
+            <td><span class="badge badge-gray">${room.code}</span></td>
+            <td><span style="font-size:11px; text-transform:uppercase; font-weight:700; color:#475569; background-color:${bgColor}; padding:4px 8px; border-radius:4px;">${clusterName}</span></td>
+            <td><strong>${room.name}</strong></td>
+            <td>${actionHtml}</td>
+            <td>
+                ${!isBar ? `<button class="btn btn-outline" style="padding:4px 8px; font-size:12px; color:var(--danger); border-color:var(--danger);" onclick="deleteRoom(${idx})">Delete</button>` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+    updateStats();
+}
+
+function setBarRoom(id) {
+    store.barRoomId = id;
+    saveStore();
+    renderRoomsTable();
+    renderSupplementMatrix(); // Update Grid
+    renderMatrix();
+}
+
+function openRoomModal() {
+    const select = document.getElementById('m_room_cluster');
+    select.innerHTML = '';
+    if (store.clusters) {
+        store.clusters.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.innerText = c.name;
+            select.appendChild(opt);
+        });
+    }
+    document.getElementById('roomModal').style.display = 'flex';
+}
+
+function saveRoom() {
+    const name = document.getElementById('m_room_name').value;
+    const code = document.getElementById('m_room_code').value;
+    const clusterId = document.getElementById('m_room_cluster').value;
+
+    if (name && code) {
+        store.rooms.push({
+            id: 'r' + Date.now(),
+            code,
+            name,
+            cluster: clusterId,
+            options: [
+                { id: 'o_def_1', name: 'Standard', delta: 0 }
+            ]
+        });
+        saveStore();
+        renderRoomsTable();
+        renderSupplementMatrix();
+        renderMatrix();
+        closeModal('roomModal');
+    }
+}
+
+function deleteRoom(idx) {
+    store.rooms.splice(idx, 1);
+    saveStore();
+    renderRoomsTable();
+    renderSupplementMatrix();
+    renderMatrix();
+}
+
+/* --- RATE PLAN CONFIGURATION --- */
+
+function renderRatesTable() {
+    const tbody = document.getElementById('ratesTableBody');
+    tbody.innerHTML = '';
+    const isExact = store.pricingModel === 'exact';
+
+    // Update Header Text if needed? Ideally we manipulate DOM headers too but let's keep it simple.
+    // Maybe change the 4th column header dynamically?
+    const tableHeader = document.querySelector('#ratesTable thead tr');
+    if (tableHeader) {
+        // Headers: Plan Code, Name, Type, Derivation Rule, Actions
+        // indices: 0, 1, 2, 3, 4
+        const headers = tableHeader.querySelectorAll('th');
+        if (headers[3]) headers[3].innerText = isExact ? 'Pricing Model' : 'Derivation Rule';
+    }
+
+    store.rates.forEach((rate, idx) => {
+        const tr = document.createElement('tr');
+
+        // Parent Info
+        let derivationInfo = '-';
+        if (isExact) {
+            derivationInfo = '<span class="badge badge-gray">Manual / Fixed</span>';
+        } else {
+            if (rate.type === 'derived') {
+                const parent = store.rates.find(r => r.id === rate.parent);
+                const parentName = parent ? parent.code : 'Unknown';
+                const ruleText = rate.rule === 'percent' ? `${rate.value}%` : `$${rate.value}`;
+                derivationInfo = `Linked to <strong>${parentName}</strong> <span class="badge badge-gray" style="margin-left:4px;">${ruleText}</span>`;
+            } else {
+                derivationInfo = '<span class="badge badge-blue">Independent Source</span>';
+            }
+        }
+
+        let typeLabel = isExact ? 'Fixed' : (rate.type === 'source' ? 'Source' : 'Derived');
+
+        tr.innerHTML = `
+            <td><strong>${rate.code}</strong></td>
+            <td>${rate.name}</td>
+            <td>${typeLabel}</td>
+            <td>${derivationInfo}</td>
+            <td>
+                <button class="btn btn-outline" style="padding:4px 8px; font-size:12px; color:var(--danger); border-color:var(--danger);" onclick="deleteRate(${idx})">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+    updateStats();
+}
+
+function openRateModal() {
+    document.getElementById('m_rate_name').value = '';
+    document.getElementById('m_rate_code').value = '';
+
+    // Populate Parents
+    const sel = document.getElementById('m_rate_parent');
+    sel.innerHTML = '';
+    store.rates.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.text = r.name;
+        sel.appendChild(opt);
+    });
+
+    toggleDerivationFields();
+    document.getElementById('rateModal').style.display = 'flex';
+}
+
+function toggleDerivationFields() {
+    const type = document.getElementById('m_rate_type').value;
+    document.getElementById('derivationOptions').style.display = type === 'derived' ? 'block' : 'none';
+}
+
+function saveRate() {
+    const name = document.getElementById('m_rate_name').value;
+    const code = document.getElementById('m_rate_code').value;
+    const type = document.getElementById('m_rate_type').value;
+
+    if (!name || !code) return;
+
+    const newRate = {
+        id: 'p' + Date.now(),
+        name,
+        code,
+        type,
+        supplements: {}
+    };
+
+    if (type === 'derived') {
+        newRate.parent = document.getElementById('m_rate_parent').value;
+        newRate.rule = document.getElementById('m_rate_rule').value;
+        newRate.value = parseFloat(document.getElementById('m_rate_val').value) || 0;
+    }
+
+    store.rates.push(newRate);
+    saveStore();
+    renderRatesTable();
+    renderSupplementMatrix(); // Update Grid
+    renderMatrix();
+    closeModal('rateModal');
+}
+
+function deleteRate(idx) {
+    store.rates.splice(idx, 1);
+    saveStore();
+    renderRatesTable();
+    renderSupplementMatrix(); // Update Grid
+    renderMatrix();
+}
+
+/* --- SUPPLEMENT MATRIX GRID (New Feature) --- */
+function renderSupplementMatrix() {
+    // 1. Check Mode
+    const isExact = store.pricingModel === 'exact';
+    const container = document.getElementById('suppMatrixTable').parentElement;
+
+    // Simplistic handling: If exact mode, hide table content and show message overlay?
+    // Or clear table and put a row saying NA.
+
+    const thead = document.getElementById('suppMatrixHead');
+    const tbody = document.getElementById('suppMatrixBody');
+
+    if (isExact) {
+        thead.innerHTML = '';
+        tbody.innerHTML = `<tr><td style="padding:40px; text-align:center; color:var(--text-muted); font-style:italic;">
+            Supplements are not used in Exact Pricing Mode. Each room and option price is set independently.
+        </td></tr>`;
+        return;
+    }
+
+    // HEADERS (Rates)
+    let headerHtml = '<th style="min-width:150px;">Room Type / Rate Plan</th>';
+    store.rates.forEach(rate => {
+        let badge = rate.type === 'source' ? '<span class="badge badge-green">Source</span>' : '<span class="badge badge-gray">Derived</span>';
+        headerHtml += `<th style="text-align:center; min-width:120px;">
+            <div>${rate.name}</div>
+            <div style="font-size:10px; margin-top:4px;">${badge}</div>
+        </th>`;
+    });
+    thead.innerHTML = headerHtml;
+
+    // BODY (Rooms by Cluster)
+    tbody.innerHTML = '';
+
+    store.clusters.forEach(cluster => {
+        // Find rooms in this cluster
+        const clusterRooms = store.rooms.filter(r => (r.cluster || 'c1') === cluster.id);
+        if (clusterRooms.length === 0) return;
+
+        // Cluster Header
+        const bgColor = cluster.color || '#f1f5f9';
+        tbody.innerHTML += `<tr style="background:${bgColor}; border-top:2px solid #e2e8f0; border-bottom:1px solid #e2e8f0;">
+            <td colspan="${store.rates.length + 1}" style="font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px; padding:8px 12px;">
+                ${cluster.name} Cluster
+            </td>
+        </tr>`;
+
+        clusterRooms.forEach(room => {
+            const isBar = room.id === store.barRoomId;
+
+            // 1. MAIN ROOM ROW
+            let roomRowHtml = `<td style="font-weight:bold;">
+                <div>${room.name}</div>
+                ${isBar ? '<div style="font-size:10px; color:var(--primary);">Anchor Room</div>' : ''}
+            </td>`;
+
+            store.rates.forEach(rate => {
+                if (rate.type === 'source') {
+                    if (isBar) {
+                        roomRowHtml += `<td style="text-align:center; background:#f0fdf4; color:#166534; font-size:11px;">Anchor Base</td>`;
+                    } else {
+                        const val = rate.supplements && rate.supplements[room.id] !== undefined ? rate.supplements[room.id] : '';
+                        const style = val !== '' ? 'font-weight:bold; border-color:#3b82f6;' : '';
+                        roomRowHtml += `<td style="text-align:center;">
+                            <input type="number" class="matrix-input" style="width:80px; ${style}" 
+                                   placeholder="0" value="${val}"
+                                   onchange="updateSupplementGrid('${rate.id}', '${room.id}', this.value)">
+                        </td>`;
+                    }
+                } else {
+                    // Derived - Always assume Day 1 Base Rate for reference to show something
+                    const baseRef = store.days[0] ? store.days[0].baseRate : 100;
+                    const calcPrice = resolveRatePrice(rate, baseRef, store.rates, room, null); // passing null date for generic calc
+                    roomRowHtml += `<td style="text-align:center; color:#475569; font-size:11px;">
+                        <div style="font-weight:500;">$${calcPrice.toFixed(0)}</div>
+                        <div style="font-size:9px; color:#94a3b8;">Derived</div>
+                    </td>`;
+                }
+            });
+
+            const tr = document.createElement('tr');
+            if (cluster.color) tr.style.backgroundColor = cluster.color;
+            tr.innerHTML = roomRowHtml;
+            tbody.appendChild(tr);
+
+            // 2. OPTION ROWS
+            if (room.options && room.options.length > 0) {
+                room.options.forEach(opt => {
+                    let optRowHtml = `<td style="padding-left:30px; font-size:12px; color:#475569;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>↳ ${opt.name}</span>
+                        </div>
+                     </td>`;
+
+                    store.rates.forEach(rate => {
+                        const isSource = rate.type === 'source';
+
+                        if (isSource) {
+                            // EDITABLE for Source Rate (Global Delta for now)
+                            optRowHtml += `<td style="text-align:center;">
+                                <input type="number" class="matrix-input" style="width:70px; font-size:11px;" 
+                                       value="${opt.delta}"
+                                       onchange="updateOptionDelta('${room.id}', '${opt.id}', this.value)">
+                             </td>`;
+                        } else {
+                            // Derived
+                            optRowHtml += `<td style="text-align:center; opacity:0.7; font-size:11px;">
+                                + $${opt.delta}
+                             </td>`;
+                        }
+                    });
+
+                    const optTr = document.createElement('tr');
+                    if (cluster.color) optTr.style.backgroundColor = cluster.color;
+                    optTr.innerHTML = optRowHtml;
+                    tbody.appendChild(optTr);
+                });
+            }
+        });
+    });
+}
+
+function updateOptionDelta(roomId, optId, val) {
+    const room = store.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    const opt = room.options.find(o => o.id === optId);
+    if (opt) {
+        opt.delta = parseFloat(val) || 0;
+        saveStore();
+        renderSupplementMatrix();
+        renderMatrix();
+    }
+}
+
+function updateSupplementGrid(rateId, roomId, value) {
+    const rate = store.rates.find(r => r.id === rateId);
+    if (!rate) return;
+
+    if (!rate.supplements) rate.supplements = {};
+
+    if (value.trim() === '') {
+        delete rate.supplements[roomId];
+    } else {
+        rate.supplements[roomId] = parseFloat(value);
+    }
+
+    saveStore();
+    renderSupplementMatrix(); // Re-render to update styles
+    renderMatrix(); // Update Simulation
+}
+
+/* --- RATE MATRIX SIMULATION --- */
+
+function renderMatrix() {
+    const thead = document.getElementById('matrixThead');
+    const tbody = document.getElementById('matrixTbody');
+    const isExact = store.pricingModel === 'exact';
+
+    // 1. HEADERS (DATES)
+    let headerHtml = '<th style="min-width:200px;">Rate Product</th>';
+    store.days.forEach(day => {
+        headerHtml += `<th style="text-align:center; min-width:80px;">${day.date}</th>`;
+    });
+    thead.innerHTML = headerHtml;
+
+    // 2. BODY
+    tbody.innerHTML = '';
+
+    // ROW A: GLOBAL ANCHOR INPUTS (Only show in Standard Mode)
+    if (!isExact) {
+        const barRoom = store.rooms.find(r => r.id === store.barRoomId);
+        const anchorName = barRoom ? barRoom.name : 'Unknown';
+
+        let anchorRow = `<tr style="background:#f0fdf4; border-bottom:2px solid #22c55e;">
+            <td>
+                <strong>Anchor Base Rate</strong>
+                <div style="font-size:11px; color:#166534;">Controls ${anchorName} BAR</div>
+            </td>`;
+
+        store.days.forEach((day, idx) => {
+            anchorRow += `<td style="text-align:center;">
+                <input type="number" 
+                       value="${day.baseRate}" 
+                       oninput="updateDailyBase(${idx}, this.value)"
+                       style="width: 60px; text-align: right; padding: 4px; border: 1px solid #86efac; border-radius: 4px; font-weight:bold; color:#166534;">
+            </td>`;
+        });
+        anchorRow += '</tr>';
+        tbody.innerHTML += anchorRow;
+    }
+
+    // ROW B: PRODUCT GRID (Rate > Clusters > Rooms)
+    store.rates.forEach(rate => {
+        const isSource = rate.type === 'source';
+
+        // Group Header (Rate Plan)
+        let headerDetail = isExact ? 'Fixed Pricing Plan' : (isSource ? 'Source Plan' : 'Derived Plan');
+        let headerColor = isExact ? '#4f46e5' : (isSource ? 'var(--primary)' : '#64748b');
+
+        tbody.innerHTML += `<tr style="background:#f1f5f9;"><td colspan="${store.days.length + 1}" style="font-size:12px; font-weight:bold; letter-spacing:0.5px; text-transform:uppercase; color:${headerColor}; padding-top:16px; border-bottom: 1px solid #e2e8f0;">
+            ${rate.name} <span style="font-weight:normal; opacity:0.7; font-size:11px; margin-left:8px;">(${headerDetail})</span>
+            <div style="font-size:10px; opacity:0.6; font-weight:normal;">${rate.code}</div>
+        </td></tr>`;
+
+        // Loop Clusters
+        const clusters = store.clusters || [{ id: 'c1', name: 'Default' }];
+
+        clusters.forEach(cluster => {
+            const clusterRooms = store.rooms.filter(r => (r.cluster || 'c1') === cluster.id);
+            if (clusterRooms.length === 0) return;
+
+            // Cluster Sub-Header
+            const bgColor = cluster.color || '#fff';
+            tbody.innerHTML += `<tr>
+                <td colspan="${store.days.length + 1}" style="font-size:11px; font-weight:600; color:#475569; background:${bgColor}; padding:6px 12px; border-bottom:1px solid #cbd5e1; padding-left:24px;">
+                    ${cluster.name} Cluster
+                </td>
+            </tr>`;
+
+            clusterRooms.forEach(room => {
+                const isBarRoom = room.id === store.barRoomId;
+                const roomBgColor = cluster.color || '#fff';
+
+                // 1. ROOM ROW (Base Price)
+                let metaInfo = '';
+                if (!isExact && isSource) {
+                    if (isBarRoom) {
+                        metaInfo = `<span style="color:#166534; font-size:10px; background:#dcfce7; padding:2px 4px; border-radius:4px;">Anchor</span>`;
+                    } else {
+                        const supp = rate.supplements && rate.supplements[room.id] !== undefined ? rate.supplements[room.id] : 0;
+                        if (supp !== 0) metaInfo = `<span style="color:#64748b; font-size:10px;">+ $${supp} Supp</span>`;
+                    }
+                }
+
+                let roomRowHtml = `<td style="border-right:1px solid #cbd5e1;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="padding-left:12px; font-weight:700; color:#334155; font-size:12px;">
+                            ${room.name}
+                        </div>
+                        <div>${metaInfo}</div>
+                    </div>
+                </td>`;
+
+                // Calculate Base Prices (Room Row)
+                store.days.forEach(day => {
+                    const dateKey = day.date;
+                    const overrideKey = `${room.id}_${dateKey}`;
+                    const isOverridden = rate.overrides && rate.overrides[overrideKey] !== undefined;
+
+                    // In Exact Mode, if no override exists, we should probably start with 0 or the last known good price?
+                    // Let's use the resolve function but it might return 0 if no anchors?
+                    // Actually resolveRatePrice still works, it just returns the derivation. 
+                    // In exact mode, we want that derivation to be the STARTING point for the input, but treated as an override.
+
+                    const calculatedPrice = resolveRatePrice(rate, day.baseRate, store.rates, room, dateKey);
+
+                    // Style logic
+                    let inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px;';
+                    let indicator = '';
+
+                    if (isExact) {
+                        // EXACT MODE: Everything is an input. 
+                        // If it has a value in overrides, use it. If not, use calculated as placeholder or init value.
+                        // We style it as a normal input.
+                        inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
+                    } else {
+                        // STANDARD MODE override styling
+                        if (isOverridden) {
+                            inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #ef4444; background:#fef2f2; color:#b91c1c; font-weight:bold; border-radius:4px;';
+                            indicator = `<div title="Clear Override" 
+                                          onclick="updateCalculatedPrice('${rate.id}', '${room.id}', '${dateKey}', '')"
+                                          style="font-size:10px; color:#ef4444; position:absolute; top:0; right:0px; cursor:pointer; background:#fff; border:1px solid #ef4444; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
+                        } else if (isSource && isBarRoom) {
+                            inputStyle += 'color:#166534; font-weight:700;';
+                        } else {
+                            inputStyle += 'color:#334155; font-weight:600;';
+                        }
+                    }
+
+                    roomRowHtml += `<td style="text-align:center; position:relative;">
+                        ${indicator}
+                        <input type="number" 
+                               value="${isOverridden ? rate.overrides[overrideKey].toFixed(0) : calculatedPrice.toFixed(0)}"
+                               onchange="updateCalculatedPrice('${rate.id}', '${room.id}', '${dateKey}', this.value)"
+                               style="${inputStyle}"
+                        >
+                    </td>`;
+                });
+
+                tbody.innerHTML += `<tr style="background:${roomBgColor}; border-top:1px solid #cbd5e1;">${roomRowHtml}</tr>`;
+
+                // 2. OPTION ROWS (Total Price: Base + Delta)
+                const options = room.options || [];
+
+                options.forEach(opt => {
+                    let optRowHtml = `<td style="padding-left:32px; font-size:11px; color:#475569; border-right:1px solid #cbd5e1;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <span>↳ ${opt.name}</span>
+                            <span style="color:#64748b; opacity:0.7; font-size:10px;">${opt.delta > 0 ? '+$' + opt.delta : ''}</span>
+                        </div>
+                     </td>`;
+
+                    store.days.forEach(day => {
+                        const dateKey = day.date;
+                        const basePrice = resolveRatePrice(rate, day.baseRate, store.rates, room, dateKey);
+
+                        const optOverrideKey = `${room.id}_${opt.id}_${dateKey}`;
+                        const isOptOverridden = rate.optionOverrides && rate.optionOverrides[optOverrideKey] !== undefined;
+
+                        let finalVal = isOptOverridden ? rate.optionOverrides[optOverrideKey] : (basePrice + (opt.delta || 0));
+
+                        // Styles
+                        let cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px; color:#64748b;';
+                        let optIndicator = '';
+
+                        if (isExact) {
+                            cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
+                        } else {
+                            if (isOptOverridden) {
+                                cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #f59e0b; background:#fffbeb; color:#b45309; font-weight:bold; border-radius:4px;';
+                                optIndicator = `<div title="Clear Option Override" 
+                                                 onclick="updateOptionOverride('${rate.id}', '${room.id}', '${opt.id}', '${dateKey}', '')"
+                                                 style="font-size:10px; color:#f59e0b; position:absolute; top:-6px; right:0px; cursor:pointer; background:#fff; border:1px solid #f59e0b; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
+                            } else if (isSource && isBarRoom && opt.delta === 0) {
+                                cellStyle += 'color:#166534; font-weight:600;';
+                            }
+                        }
+
+                        optRowHtml += `<td style="text-align:center; position:relative;">
+                            ${optIndicator}
+                            <input type="number" 
+                                   value="${finalVal.toFixed(0)}"
+                                   onchange="updateOptionOverride('${rate.id}', '${room.id}', '${opt.id}', '${dateKey}', this.value)"
+                                   style="${cellStyle}"
+                            >
+                        </td>`;
+                    });
+
+                    tbody.innerHTML += `<tr style="background:${roomBgColor}; border-bottom:1px solid #f1f5f9;">${optRowHtml}</tr>`;
+                });
+            });
+        });
+    });
+}
+
+function updateOptionOverride(rateId, roomId, optId, date, val) {
+    const rate = store.rates.find(r => r.id === rateId);
+    if (!rate) return;
+    if (!rate.optionOverrides) rate.optionOverrides = {};
+
+    const key = `${roomId}_${optId}_${date}`;
+    if (val === '') {
+        delete rate.optionOverrides[key];
+    } else {
+        rate.optionOverrides[key] = parseFloat(val);
+    }
+    saveStore();
+    renderMatrix();
+}
+
+function updateCalculatedPrice(rateId, roomId, date, val) {
+    const rate = store.rates.find(r => r.id === rateId);
+    if (!rate) return;
+    if (!rate.overrides) rate.overrides = {};
+
+    // Check if user cleared it or set same as calculated? 
+    if (val === '') {
+        delete rate.overrides[`${roomId}_${date}`];
+    } else {
+        rate.overrides[`${roomId}_${date}`] = parseFloat(val);
+    }
+    saveStore();
+    renderMatrix();
+}
+
+function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {
+    // 1. Check Overrides (Priority 1 for both modes)
+    if (date && targetRate.overrides) {
+        const key = `${room.id}_${date}`;
+        if (targetRate.overrides[key] !== undefined) return targetRate.overrides[key];
+    }
+
+    // 2. Exact Mode Logic
+    if (store.pricingModel === 'exact') {
+        // In exact mode, if there's no override, the price is effectively 0 or unset.
+        // We do NOT derive from parents.
+        return 0;
+    }
+
+    // 3. Standard Mode Derivation logic
+    if (targetRate.type === 'source') {
+        if (room.id === store.barRoomId) return anchorValue;
+
+        // Supplement strictly from rate
+        let supp = 0;
+        if (targetRate.supplements && targetRate.supplements[room.id] !== undefined) {
+            supp = targetRate.supplements[room.id];
+        }
+        return anchorValue + supp;
+    }
+
+    const parentRate = allRates.find(r => r.id === targetRate.parent);
+    if (!parentRate) return anchorValue;
+
+    // IMPORTANT: Pass room AND date context down
+    const parentPrice = resolveRatePrice(parentRate, anchorValue, allRates, room, date);
+
+    if (targetRate.rule === 'percent') {
+        return parentPrice * (1 + (targetRate.value / 100));
+    } else {
+        return parentPrice + targetRate.value;
+    }
+}
+
+// --- UTILS ---
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+// Init call is at the top of file or triggered by window load, but we'll export it or let HTML call it
+// window.onload = init; // Better to let HTML verify script loading

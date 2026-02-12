@@ -1,0 +1,282 @@
+<title>Enterprise Rate Manager - Exact Pricing</title>
+<link rel="stylesheet" href="css/exact-styles.css">
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="brand">
+            <span>Rate</span>Manager <span style="font-size:10px; opacity:0.6; margin-left:4px;">(Exact)</span>
+        </div>
+        <nav class="nav">
+            <div class="nav-item active" onclick="switchView('dashboard', this)">
+                <span class="nav-icon">📊</span> Overview
+            </div>
+            <div class="nav-item" onclick="switchView('rooms', this)">
+                <span class="nav-icon">🏨</span> Room Types
+            </div>
+            <div class="nav-item" onclick="switchView('rates', this)">
+                <span class="nav-icon">🏷️</span> Rate Plans
+            </div>
+            <div class="nav-item" onclick="switchView('matrix', this)">
+                <span class="nav-icon">📅</span> Rates Grid (Matrix)
+            </div>
+        </nav>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main">
+        <div class="top-bar">
+            <div class="page-title" id="pageTitle">Overview</div>
+            <div>
+                <a href="index.html" class="btn btn-outline">Switch to Standard Model</a>
+                <button class="btn btn-outline" style="margin-left:12px;">My Hotel (Demo)</button>
+            </div>
+        </div>
+
+        <div class="content-scroll">
+
+            <!-- VIEW: DASHBOARD -->
+            <div id="view-dashboard" class="view-section active">
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px;">
+                    <div class="card" style="padding: 24px;">
+                        <div style="color:var(--text-muted); font-size:13px; margin-bottom:8px;">Active Rate Plans</div>
+                        <div style="font-size:32px; font-weight:700;" id="stat-plans">0</div>
+                    </div>
+                    <div class="card" style="padding: 24px;">
+                        <div style="color:var(--text-muted); font-size:13px; margin-bottom:8px;">Room Types</div>
+                        <div style="font-size:32px; font-weight:700;" id="stat-rooms">0</div>
+                    </div>
+                    <div class="card" style="padding: 24px;">
+                        <div style="color:var(--text-muted); font-size:13px; margin-bottom:8px;">Base Rate (BAR)</div>
+                        <div style="font-size:32px; font-weight:700; color:var(--primary);">$100</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Quick Actions</div>
+                    </div>
+                    <div style="padding: 24px; display:flex; gap:12px;">
+                        <button class="btn btn-primary" onclick="switchView('rates', null)">Manage Rate
+                            Hierarchy</button>
+                        <button class="btn btn-outline" onclick="switchView('matrix', null)">View Rate Grid</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: ROOM TYPES -->
+            <div id="view-rooms" class="view-section">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Room Inventory</div>
+                        <button class="btn btn-primary" onclick="openRoomModal()">+ Add Room Type</button>
+                    </div>
+                    <table id="roomsTable">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Cluster</th>
+                                <th>Name</th>
+                                <th>Pricing Strategy</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roomsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- VIEW: RATE PLANS -->
+            <div id="view-rates" class="view-section">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Rate Plan Configuration</div>
+                        <button class="btn btn-primary" onclick="openRateModal()">+ Add Rate Plan</button>
+                    </div>
+                    <table id="ratesTable">
+                        <thead>
+                            <tr>
+                                <th>Plan Code</th>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Derivation Rule</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ratesTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="margin-top: 32px;">
+                    <div class="card-header">
+                        <div class="card-title">Room Supplement Configuration Matrix</div>
+                        <div style="font-size:13px; color:var(--text-muted);">
+                            Configure base supplements for Source Plans directly.
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table id="suppMatrixTable">
+                            <thead id="suppMatrixHead"></thead>
+                            <tbody id="suppMatrixBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: MATRIX -->
+            <div id="view-matrix" class="view-section">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Daily Rates Matrix (Simulation)</div>
+                        <div>
+                            <label style="font-size:13px; color:var(--text-muted); margin-right:8px;">Global Base
+                                Rate:</label>
+                            <input type="number" id="globalBaseInput" value="100" class="matrix-input"
+                                oninput="updateGlobalBase(this.value)">
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table id="matrixVisualTable">
+                            <thead>
+                                <tr id="matrixThead"></tr>
+                            </thead>
+                            <tbody id="matrixTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Room Modal -->
+    <div id="roomModal" class="modal-overlay">
+        <div class="modal">
+            <div class="card-header">
+                <div class="card-title">Add/Edit Room Type</div>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Cluster Group</label>
+                    <select id="m_room_cluster" class="form-select">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Room Name</label>
+                    <input type="text" id="m_room_name" class="form-input" placeholder="e.g. Deluxe Suite">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Room Code</label>
+                    <input type="text" id="m_room_code" class="form-input" placeholder="e.g. DLX">
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:24px;">
+                    <button class="btn btn-outline" onclick="closeModal('roomModal')">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveRoom()">Save Room</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rate Plan Modal -->
+    <div id="rateModal" class="modal-overlay">
+        <div class="modal">
+            <div class="card-header">
+                <div class="card-title">Add/Edit Rate Plan</div>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="m_rate_id">
+                <div class="form-group">
+                    <label class="form-label">Plan Name</label>
+                    <input type="text" id="m_rate_name" class="form-input" placeholder="e.g. Non-Refundable">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Plan Code</label>
+                    <input type="text" id="m_rate_code" class="form-input" placeholder="e.g. NREF">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Structure Type</label>
+                    <select id="m_rate_type" class="form-select" onchange="toggleDerivationFields()">
+                        <option value="source">Independent Data Source (Base)</option>
+                        <option value="derived">Derived Plan</option>
+                    </select>
+                </div>
+
+                <div id="derivationOptions"
+                    style="display:none; background:#f8fafc; padding:16px; border-radius:8px; border:1px solid var(--border);">
+                    <div class="form-group">
+                        <label class="form-label">Parent Plan</label>
+                        <select id="m_rate_parent" class="form-select"></select>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                        <div class="form-group">
+                            <label class="form-label">Rule</label>
+                            <select id="m_rate_rule" class="form-select">
+                                <option value="percent">Percentage (%)</option>
+                                <option value="fixed">Fixed Amount ($)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Value</label>
+                            <input type="number" id="m_rate_val" class="form-input" value="-10">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:24px;">
+                    <button class="btn btn-outline" onclick="closeModal('rateModal')">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveRate()">Save Rate Plan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROOM SUPPLEMENT MODAL -->
+    <div id="suppModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Rate Supplements</h3>
+                <button class="btn btn-outline" onclick="closeModal('suppModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="m_supp_rate_id">
+                <p style="color:#64748b; font-size:13px; margin-bottom:16px;">
+                    Override the default room supplements for this specific Rate Plan. Leave blank to use the room's
+                    default.
+                </p>
+
+                <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                    <thead>
+                        <tr style="text-align:left; border-bottom:1px solid #e2e8f0;">
+                            <th style="padding:8px;">Room Type</th>
+                            <th style="padding:8px;">Default Supp.</th>
+                            <th style="padding:8px; width:120px;">Override ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="suppTableBody">
+                    </tbody>
+                </table>
+
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:24px;">
+                    <button class="btn btn-outline" onclick="closeModal('suppModal')">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveSupplements()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/store.js"></script>
+    <script src="js/exact-pricing.js"></script>
+    <script>
+        // Start App
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+
+</html>
