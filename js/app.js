@@ -12,7 +12,7 @@ function init() {
 
     // Initialize UI Elements
 
-    // Render Views
+    // Reading file only.ws
     renderRoomsTable();
     renderRatesTable();
     renderSupplementMatrix();
@@ -600,10 +600,28 @@ function renderMatrix() {
                 const options = room.options || [];
 
                 options.forEach(opt => {
+                    // Start: Fix Delta Handling
+                    let deltaVal = 0;
+                    let deltaType = 'fixed';
+                    if (typeof opt.delta === 'object') {
+                        deltaVal = opt.delta.value || 0;
+                        deltaType = opt.delta.type || 'fixed';
+                    } else {
+                        deltaVal = parseFloat(opt.delta) || 0;
+                    }
+
+                    // Display Logic
+                    let displayDelta = '';
+                    if (deltaVal !== 0) {
+                        if (deltaType === 'percent') displayDelta = `+${deltaVal}%`;
+                        else displayDelta = `+$${deltaVal}`;
+                    }
+                    // End: Fix Delta Handling
+
                     let optRowHtml = `<td style="padding-left:32px; font-size:11px; color:#475569; border-right:1px solid #cbd5e1;">
                         <div style="display:flex; justify-content:space-between;">
                             <span>↳ ${opt.name}</span>
-                            <span style="color:#64748b; opacity:0.7; font-size:10px;">${opt.delta > 0 ? '+$' + opt.delta : ''}</span>
+                            <span style="color:#64748b; opacity:0.7; font-size:10px;">${displayDelta}</span>
                         </div>
                      </td>`;
 
@@ -614,7 +632,16 @@ function renderMatrix() {
                         const optOverrideKey = `${room.id}_${opt.id}_${dateKey}`;
                         const isOptOverridden = rate.optionOverrides && rate.optionOverrides[optOverrideKey] !== undefined;
 
-                        let finalVal = isOptOverridden ? rate.optionOverrides[optOverrideKey] : (basePrice + (opt.delta || 0));
+                        // Start: Calculation Fix
+                        let calculatedOptPrice = 0;
+                        if (deltaType === 'percent') {
+                            calculatedOptPrice = basePrice * (1 + (deltaVal / 100));
+                        } else {
+                            calculatedOptPrice = basePrice + deltaVal;
+                        }
+
+                        let finalVal = isOptOverridden ? rate.optionOverrides[optOverrideKey] : calculatedOptPrice;
+                        // End: Calculation Fix
 
                         // Styles
                         let cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px; color:#64748b;';
@@ -628,7 +655,7 @@ function renderMatrix() {
                                 optIndicator = `<div title="Clear Option Override" 
                                                  onclick="updateOptionOverride('${rate.id}', '${room.id}', '${opt.id}', '${dateKey}', '')"
                                                  style="font-size:10px; color:#f59e0b; position:absolute; top:-6px; right:0px; cursor:pointer; background:#fff; border:1px solid #f59e0b; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
-                            } else if (isSource && isBarRoom && opt.delta === 0) {
+                            } else if (isSource && isBarRoom && deltaVal === 0) {
                                 cellStyle += 'color:#166534; font-weight:600;';
                             }
                         }
