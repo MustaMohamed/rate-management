@@ -400,6 +400,7 @@ function renderSupplementMatrix() {
 
                     const optTr = document.createElement('tr');
                     // slightly lighter bg for options?
+                    if (cluster.color) optTr.style.backgroundColor = cluster.color;
                     optTr.innerHTML = optRowHtml;
                     tbody.appendChild(optTr);
                 });
