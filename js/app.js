@@ -559,8 +559,20 @@ function renderMatrix() {
                     if (isBarRoom) {
                         metaInfo = `<span style="color:#166534; font-size:10px; background:#dcfce7; padding:2px 4px; border-radius:4px;">Anchor</span>`;
                     } else {
-                        const supp = rate.supplements && rate.supplements[room.id] !== undefined ? rate.supplements[room.id] : 0;
-                        if (supp !== 0) metaInfo = `<span style="color:#64748b; font-size:10px;">+ $${supp} Supp</span>`;
+                        // Handle Object {type, value} or number logic
+                        let supp = { type: 'fixed', value: 0 };
+                        if (rate.supplements && rate.supplements[room.id] !== undefined) {
+                            const raw = rate.supplements[room.id];
+                            if (typeof raw === 'object') supp = raw;
+                            else supp = { type: 'fixed', value: raw };
+                        }
+
+                        if (supp.value !== 0) {
+                            const suffix = supp.type === 'percent' ? '%' : '$';
+                            const prefix = supp.type === 'fixed' ? '$' : '';
+                            const sign = supp.value > 0 ? '+' : '';
+                            metaInfo = `<span style="color:#64748b; font-size:10px;">${sign}${prefix}${supp.value}${suffix} Supp</span>`;
+                        }
                     }
                 }
 
@@ -579,11 +591,6 @@ function renderMatrix() {
                     const overrideKey = `${room.id}_${dateKey}`;
                     const isOverridden = rate.overrides && rate.overrides[overrideKey] !== undefined;
 
-                    // In Exact Mode, if no override exists, we should probably start with 0 or the last known good price?
-                    // Let's use the resolve function but it might return 0 if no anchors?
-                    // Actually resolveRatePrice still works, it just returns the derivation. 
-                    // In exact mode, we want that derivation to be the STARTING point for the input, but treated as an override.
-
                     const calculatedPrice = resolveRatePrice(rate, day.baseRate, store.rates, room, dateKey);
 
                     // Style logic
@@ -592,8 +599,6 @@ function renderMatrix() {
 
                     if (isExact) {
                         // EXACT MODE: Everything is an input. 
-                        // If it has a value in overrides, use it. If not, use calculated as placeholder or init value.
-                        // We style it as a normal input.
                         inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
                     } else {
                         // STANDARD MODE override styling

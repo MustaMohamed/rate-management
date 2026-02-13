@@ -115,6 +115,16 @@ function initStore() {
     if (!store.days || store.days.length === 0) {
         initCalendarData();
     }
+
+    // Ensure clusters exist (hydration for legacy data)
+    if (!store.clusters || store.clusters.length === 0) {
+        store.clusters = [
+            { id: 'c1', name: 'Standard', color: '#bfdbfe' },
+            { id: 'c2', name: 'Premium', color: '#fed7aa' },
+            { id: 'c3', name: 'Luxury', color: '#e9d5ff' }
+        ];
+        saveStore();
+    }
 }
 
 function saveStore() {
