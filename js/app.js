@@ -16,6 +16,7 @@ function init() {
     renderRoomsTable();
     renderRatesTable();
     renderSupplementMatrix();
+    renderLevelsTable();
     renderMatrix();
 
     // Update Stats
@@ -62,9 +63,10 @@ function switchView(viewName, element) {
         dashboard: 'Overview',
         rooms: 'Room Type Configuration',
         rates: 'Rate Plan Management',
+        levels: 'Rate Level Ladder',
         matrix: 'Rate Grid & Inventory'
     };
-    document.getElementById('pageTitle').innerText = titles[viewName];
+    document.getElementById('pageTitle').innerText = titles[viewName] || 'Enterprise Rate Manager';
 }
 
 /* --- ROOM MANAGMENT --- */
@@ -435,27 +437,58 @@ function renderMatrix() {
     tbody.innerHTML = '';
 
     // ROW A: GLOBAL ANCHOR INPUTS (Only show in Standard Mode)
-    if (!isExact) {
-        const barRoom = store.rooms.find(r => r.id === store.barRoomId);
-        const anchorName = barRoom ? barRoom.name : 'Unknown';
+    const levels = store.rateLevels || [];
 
-        let anchorRow = `<tr style="background:#f0fdf4; border-bottom:2px solid #22c55e;">
-            <td>
-                <strong>Anchor Base Rate</strong>
-                <div style="font-size:11px; color:#166534;">Controls ${anchorName} BAR</div>
-            </td>`;
+    // ROW A0: RATE LEVEL SELECTOR
+    let levelRow = `<tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+        <td style="padding-top:12px; padding-bottom:12px;">
+            <strong style="color:#64748b;">Daily Pricing Level</strong>
+            <div style="font-size:10px; color:#94a3b8;">Set base rate from level</div>
+        </td>`;
 
-        store.days.forEach((day, idx) => {
-            anchorRow += `<td style="text-align:center;">
-                <input type="number" 
-                       value="${day.baseRate}" 
-                       oninput="updateDailyBase(${idx}, this.value)"
-                       style="width: 60px; text-align: right; padding: 4px; border: 1px solid #86efac; border-radius: 4px; font-weight:bold; color:#166534;">
-            </td>`;
+    store.days.forEach(day => {
+        let options = `<option value="">- Custom -</option>`;
+        levels.forEach(l => {
+            // Check if current anchor matches a level base value?
+            // Actually, we should store the SELECTED level in store.dailyLevels?
+            // For now, let's just use it as a setter. If value matches, select it?
+            const isMatch = (store.anchorRates && store.anchorRates[day.date] == l.baseValue);
+            options += `<option value="${l.id}" ${isMatch ? 'selected' : ''}>${l.name} ($${l.baseValue})</option>`;
         });
-        anchorRow += '</tr>';
-        tbody.innerHTML += anchorRow;
-    }
+
+        levelRow += `<td style="text-align:center;">
+            <select style="width:100%; font-size:11px; padding:4px; border:1px solid #cbd5e1; border-radius:4px;"
+                    onchange="applyDailyLevel('${day.date}', this.value)">
+                ${options}
+            </select>
+        </td>`;
+    });
+    levelRow += `</tr>`;
+    tbody.innerHTML += levelRow;
+
+
+    // ROW A: GLOBAL ANCHOR INPUTS
+    const barRoom = store.rooms.find(r => r.id === store.barRoomId);
+    const anchorName = barRoom ? barRoom.name : 'Unknown';
+
+    let anchorRow = `<tr style="background:#f0fdf4; border-bottom:2px solid #22c55e;">
+        <td>
+            <strong>Anchor Base Rate</strong>
+            <div style="font-size:10px; color:#166534;">${anchorName} (Base)</div>
+        </td>`;
+
+    store.days.forEach(day => {
+        const val = (store.anchorRates && store.anchorRates[day.date]) ? store.anchorRates[day.date] : 0;
+        anchorRow += `<td style="text-align:center;">
+            <input type="number" 
+                   value="${val}" 
+                   onchange="updateAnchorRate('${day.date}', this.value)"
+                   style="width:70px; text-align:right; font-weight:bold; color:#166534; padding:6px; border:1px solid #86efac; border-radius:4px;">
+        </td>`;
+    });
+    anchorRow += `</tr>`;
+    tbody.innerHTML += anchorRow;
+
 
     // ROW B: PRODUCT GRID (Rate > Clusters > Rooms)
     store.rates.forEach(rate => {
@@ -611,21 +644,6 @@ function renderMatrix() {
     });
 }
 
-function updateOptionOverride(rateId, roomId, optId, date, val) {
-    const rate = store.rates.find(r => r.id === rateId);
-    if (!rate) return;
-    if (!rate.optionOverrides) rate.optionOverrides = {};
-
-    const key = `${roomId}_${optId}_${date}`;
-    if (val === '') {
-        delete rate.optionOverrides[key];
-    } else {
-        rate.optionOverrides[key] = parseFloat(val);
-    }
-    saveStore();
-    renderMatrix();
-}
-
 function updateCalculatedPrice(rateId, roomId, date, val) {
     const rate = store.rates.find(r => r.id === rateId);
     if (!rate) return;
@@ -639,6 +657,87 @@ function updateCalculatedPrice(rateId, roomId, date, val) {
     }
     saveStore();
     renderMatrix();
+}
+
+function updateOptionOverride(rateId, roomId, optId, date, val) {
+    const rate = store.rates.find(r => r.id === rateId);
+    if (!rate) return;
+    if (!rate.optionOverrides) rate.optionOverrides = {};
+    const key = `${roomId}_${optId}_${date}`;
+    if (val === '') delete rate.optionOverrides[key];
+    else rate.optionOverrides[key] = parseFloat(val);
+    saveStore();
+    renderMatrix();
+}
+
+/* --- RATE LEVEL LOGIC --- */
+function renderLevelsTable() {
+    const tbody = document.getElementById('levelsTableBody');
+    if (!tbody) return; // Might not exist in this view
+    tbody.innerHTML = '';
+    const levels = store.rateLevels || [];
+
+    levels.forEach((l, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <input type="text" value="${l.name}" class="matrix-input" onchange="updateRateLevel(${idx}, 'name', this.value)" style="width:100%;">
+            </td>
+            <td>
+                <input type="number" value="${l.baseValue}" class="matrix-input" onchange="updateRateLevel(${idx}, 'baseValue', this.value)" style="width:100px;">
+            </td>
+            <td>
+                <button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger); padding:4px 8px;" onclick="deleteRateLevel(${idx})">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function addRateLevel() {
+    if (!store.rateLevels) store.rateLevels = [];
+    const len = store.rateLevels.length + 1;
+    store.rateLevels.push({
+        id: 'l' + Date.now(),
+        name: 'Level ' + len,
+        baseValue: 100 + (len * 10),
+        roomPrices: {}
+    });
+    saveStore();
+    renderLevelsTable();
+    renderMatrix();
+}
+
+function updateRateLevel(idx, field, value) {
+    if (store.rateLevels[idx]) {
+        store.rateLevels[idx][field] = (field === 'baseValue') ? parseFloat(value) : value;
+        saveStore();
+        renderMatrix(); // In case names/values changed
+    }
+}
+
+function deleteRateLevel(idx) {
+    store.rateLevels.splice(idx, 1);
+    saveStore();
+    renderLevelsTable();
+    renderMatrix();
+}
+
+function applyDailyLevel(date, levelId) {
+    const level = store.rateLevels.find(l => l.id === levelId);
+    if (level) {
+        if (!store.anchorRates) store.anchorRates = {};
+        store.anchorRates[date] = level.baseValue;
+        saveStore();
+        renderMatrix();
+    }
+}
+
+function updateAnchorRate(date, val) {
+    if (!store.anchorRates) store.anchorRates = {};
+    store.anchorRates[date] = parseFloat(val);
+    saveStore();
+    renderMatrix(); // re-render to potentially update level dropdown to "Custom"
 }
 
 function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {

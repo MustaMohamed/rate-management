@@ -20,6 +20,9 @@
             <div class="nav-item" onclick="switchView('rates', this)">
                 <span class="nav-icon">🏷️</span> Rate Plans
             </div>
+            <div class="nav-item" onclick="switchView('levels', this)">
+                <span class="nav-icon">📊</span> Rate Levels
+            </div>
             <div class="nav-item" onclick="switchView('matrix', this)">
                 <span class="nav-icon">📅</span> Rates Grid (Matrix)
             </div>
@@ -121,6 +124,33 @@
                         <table id="suppMatrixTable">
                             <thead id="suppMatrixHead"></thead>
                             <tbody id="suppMatrixBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RATE LEVELS VIEW -->
+            <div id="view-levels" class="view-section">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Rate Levels</div>
+                        <div style="font-size:12px; opacity:0.7;">Define your standard pricing ladder (Base Amounts).
+                        </div>
+                    </div>
+                    <div style="padding:16px;">
+                        <button class="btn btn-primary" style="margin-bottom:16px;" onclick="addRateLevel()">+ Add
+                            Level</button>
+                        <table class="table" id="levelsTable">
+                            <thead>
+                                <tr>
+                                    <th>Level Name</th>
+                                    <th>Base Value ($)</th>
+                                    <th style="width:100px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="levelsTableBody">
+                                <!-- JS Populated -->
+                            </tbody>
                         </table>
                     </div>
                 </div>

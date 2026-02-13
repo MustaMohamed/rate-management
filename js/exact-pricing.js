@@ -26,25 +26,54 @@ function updateStats() {
     }
 }
 
+/* --- VIEW NAVIGATION --- */
 function switchView(viewName, element) {
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    // Hide all views
+    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+    document.getElementById('view-' + viewName).classList.add('active');
+
+    // Update Nav State
     if (element) {
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         element.classList.add('active');
     } else {
-        const index = ['dashboard', 'rooms', 'rates', 'matrix'].indexOf(viewName);
-        if (index >= 0) document.querySelectorAll('.nav-item')[index].classList.add('active');
+        // If no element is passed, try to find it by viewName
+        const navItems = document.querySelectorAll('.nav-item');
+        const indexMap = {
+            dashboard: 0,
+            rooms: 1,
+            rates: 2,
+            levels: 3, // Assuming 'levels' is the 4th nav item
+            matrix: 4
+        };
+        if (indexMap[viewName] !== undefined && navItems[indexMap[viewName]]) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            navItems[indexMap[viewName]].classList.add('active');
+        }
     }
 
-    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-    document.getElementById(`view-${viewName}`).classList.add('active');
-
+    // Update Title
     const titles = {
         dashboard: 'Overview (Exact Pricing)',
         rooms: 'Room Type Configuration',
         rates: 'Rate Plan Management',
+        levels: 'Rate Level Ladder',
         matrix: 'Rate Grid & Inventory'
     };
-    document.getElementById('pageTitle').innerText = titles[viewName];
+    document.getElementById('pageTitle').innerText = titles[viewName] || 'Enterprise Rate Manager';
+
+    // Render Views based on the active view
+    renderRoomsTable();
+    renderRatesTable();
+    renderBasePriceMatrix();
+    // Only render levels grid if it's the active view or needed for other views
+    if (viewName === 'levels') {
+        renderLevelsGrid();
+    }
+    renderMatrix();
+
+    // Update Stats
+    updateStats();
 }
 
 /* --- ROOM MANAGMENT --- */
@@ -446,42 +475,306 @@ function renderMatrix() {
     });
 }
 
+/* --- RATE LEVEL LOGIC (EXACT) --- */
+function renderLevelsGrid() {
+    const thead = document.getElementById('levelsGridHead');
+    const tbody = document.getElementById('levelsGridBody');
+    if (!thead || !tbody) return;
+
+    // Headers
+    let headerHtml = '<tr><th style="min-width:120px;">Level Name</th>';
+    store.rooms.forEach(room => {
+        headerHtml += `<th style="text-align:center; min-width:80px;">${room.code}</th>`;
+    });
+    headerHtml += '<th style="width:80px;">Actions</th></tr>';
+    thead.innerHTML = headerHtml;
+
+    // Body
+    tbody.innerHTML = '';
+    const levels = store.rateLevels || [];
+
+    levels.forEach((l, idx) => {
+        let rowHtml = `<td>
+            <input type="text" value="${l.name}" class="matrix-input" onchange="updateRateLevel(${idx}, 'name', this.value)" style="width:100%;">
+        </td>`;
+
+        store.rooms.forEach(room => {
+            const price = (l.roomPrices && l.roomPrices[room.id] !== undefined) ? l.roomPrices[room.id] : '';
+            rowHtml += `<td style="text-align:center;">
+                <input type="number" value="${price}" class="matrix-input" 
+                       placeholder="-"
+                       onchange="updateLevelRoomPrice(${idx}, '${room.id}', this.value)" 
+                       style="width:80px;">
+            </td>`;
+        });
+
+        rowHtml += `<td>
+             <button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger); padding:4px 8px;" onclick="deleteRateLevel(${idx})">Del</button>
+        </td>`;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = rowHtml;
+        tbody.appendChild(tr);
+    });
+}
+
+function updateLevelRoomPrice(levelIdx, roomId, val) {
+    if (store.rateLevels[levelIdx]) {
+        if (!store.rateLevels[levelIdx].roomPrices) store.rateLevels[levelIdx].roomPrices = {};
+
+        if (val === '') delete store.rateLevels[levelIdx].roomPrices[roomId];
+        else store.rateLevels[levelIdx].roomPrices[roomId] = parseFloat(val);
+
+        saveStore();
+        renderMatrix(); // update sim if this level is used
+    }
+}
+
+function updateRateLevel(idx, field, value) {
+    if (store.rateLevels[idx]) {
+        store.rateLevels[idx][field] = value;
+        saveStore();
+        renderMatrix();
+    }
+}
+
+function addRateLevel() {
+    if (!store.rateLevels) store.rateLevels = [];
+    const len = store.rateLevels.length + 1;
+    store.rateLevels.push({
+        id: 'l' + Date.now(),
+        name: 'Level ' + len,
+        baseValue: 100, // unused in exact but kept for structure
+        roomPrices: {}
+    });
+    saveStore();
+    renderLevelsGrid();
+    renderMatrix();
+}
+
+function deleteRateLevel(idx) {
+    store.rateLevels.splice(idx, 1);
+    saveStore();
+    renderLevelsGrid();
+    renderMatrix();
+}
+
+function applyDailyLevel(date, levelId) {
+    if (!store.dailyLevels) store.dailyLevels = {};
+    if (levelId === '') delete store.dailyLevels[date];
+    else store.dailyLevels[date] = levelId;
+    saveStore();
+    renderMatrix();
+}
+
+// Override Handler Wrapper
 function updateCalculatedPrice(rateId, roomId, date, val) {
+    // In Exact Mode, this is strictly a manual override or clearing it
     const rate = store.rates.find(r => r.id === rateId);
     if (!rate) return;
     if (!rate.overrides) rate.overrides = {};
 
-    // In Exact Mode, if the value matches the Base Price, we could technically "remove" the override?
-    // But simplest user experience: Input = Override.
-    // Let's check logic:
-    // If val is empty, delete override -> reverts to Base Price.
-
+    const key = `${roomId}_${date}`;
     if (val === '') {
-        delete rate.overrides[`${roomId}_${date}`];
+        delete rate.overrides[key];
     } else {
-        rate.overrides[`${roomId}_${date}`] = parseFloat(val);
+        rate.overrides[key] = parseFloat(val);
     }
     saveStore();
     renderMatrix();
 }
 
+// Option Override
 function updateOptionOverride(rateId, roomId, optId, date, val) {
     const rate = store.rates.find(r => r.id === rateId);
     if (!rate) return;
     if (!rate.optionOverrides) rate.optionOverrides = {};
-
     const key = `${roomId}_${optId}_${date}`;
-    if (val === '') {
-        delete rate.optionOverrides[key];
-    } else {
-        rate.optionOverrides[key] = parseFloat(val);
-    }
+    if (val === '') delete rate.optionOverrides[key];
+    else rate.optionOverrides[key] = parseFloat(val);
     saveStore();
     renderMatrix();
 }
 
-// --- UTILS ---
+// Utils
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-// Init call is at the top of file or triggered by window load, but we'll export it or let HTML call it
-// window.onload = init; // Better to let HTML verify script loading
+
+/* --- RATE MATRIX SIMULATION (EXACT) --- */
+function renderMatrix() {
+    const thead = document.getElementById('matrixThead');
+    const tbody = document.getElementById('matrixTbody');
+    const levels = store.rateLevels || [];
+
+    // 1. HEADERS (DATES)
+    let headerHtml = '<th style="min-width:200px;">Rate Product</th>';
+    store.days.forEach(day => {
+        headerHtml += `<th style="text-align:center; min-width:80px;">${day.date}</th>`;
+    });
+    thead.innerHTML = headerHtml;
+
+    // 2. BODY
+    tbody.innerHTML = '';
+
+    // ROW A: LEVEL SELECTOR
+    let levelRow = `<tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+        <td style="padding-top:12px; padding-bottom:12px;">
+            <strong style="color:#64748b;">Daily Pricing Level</strong>
+            <div style="font-size:10px; color:#94a3b8;">Apply fixed prices</div>
+        </td>`;
+
+    store.days.forEach(day => {
+        const currentLvl = (store.dailyLevels && store.dailyLevels[day.date]) ? store.dailyLevels[day.date] : '';
+        let options = `<option value="">- Custom -</option>`;
+        levels.forEach(l => {
+            options += `<option value="${l.id}" ${currentLvl === l.id ? 'selected' : ''}>${l.name}</option>`;
+        });
+
+        levelRow += `<td style="text-align:center;">
+            <select style="width:100%; font-size:11px; padding:4px; border:1px solid #cbd5e1; border-radius:4px;"
+                    onchange="applyDailyLevel('${day.date}', this.value)">
+                ${options}
+            </select>
+        </td>`;
+    });
+    tbody.innerHTML += levelRow;
+
+    // PRODUCT GRID
+    store.rates.forEach(rate => {
+        // Rate Header
+        tbody.innerHTML += `<tr style="background:#f1f5f9;"><td colspan="${store.days.length + 1}" style="font-size:12px; font-weight:bold; letter-spacing:0.5px; text-transform:uppercase; color:#4f46e5; padding-top:16px; border-bottom: 1px solid #e2e8f0;">
+            ${rate.name} 
+            <div style="font-size:10px; opacity:0.6; font-weight:normal;">${rate.code}</div>
+        </td></tr>`;
+
+        // Clusters
+        const clusters = store.clusters || [{ id: 'c1', name: 'Default' }];
+        clusters.forEach(cluster => {
+            const clusterRooms = store.rooms.filter(r => (r.cluster || 'c1') === cluster.id);
+            if (clusterRooms.length === 0) return;
+
+            const bgColor = cluster.color || '#fff';
+            tbody.innerHTML += `<tr>
+                <td colspan="${store.days.length + 1}" style="font-size:11px; font-weight:600; color:#475569; background:${bgColor}; padding:6px 12px; border-bottom:1px solid #cbd5e1; padding-left:24px;">
+                    ${cluster.name} Cluster
+                </td>
+            </tr>`;
+
+            clusterRooms.forEach(room => {
+                let roomRowHtml = `<td style="border-right:1px solid #cbd5e1;">
+                    <div style="padding-left:12px; font-weight:700; color:#334155; font-size:12px;">${room.name}</div>
+                </td>`;
+
+                store.days.forEach(day => {
+                    const dateKey = day.date;
+
+                    // Logic: 
+                    // 1. Daily Override (Highest)
+                    // 2. Daily Level (Middle) -> Look up room price in level
+                    // 3. Base Price Config (Lowest)
+
+                    let val = 0;
+                    let isLevelDerived = false;
+
+                    const overrideKey = `${room.id}_${dateKey}`;
+                    const hasOverride = rate.overrides && rate.overrides[overrideKey] !== undefined;
+
+                    if (hasOverride) {
+                        val = rate.overrides[overrideKey];
+                    } else {
+                        // Check Level
+                        const lvlId = (store.dailyLevels && store.dailyLevels[dateKey]);
+                        const level = levels.find(l => l.id === lvlId);
+
+                        if (level && level.roomPrices && level.roomPrices[room.id] !== undefined) {
+                            val = level.roomPrices[room.id];
+                            isLevelDerived = true;
+                        } else {
+                            // Fallback to Base Price
+                            val = (rate.basePrices && rate.basePrices[room.id] !== undefined) ? rate.basePrices[room.id] : 0;
+                        }
+                    }
+
+                    let inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
+                    let indicator = '';
+
+                    if (hasOverride) {
+                        inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #ef4444; background:#fef2f2; color:#b91c1c; font-weight:bold; border-radius:4px;';
+                        indicator = `<div title="Clear Override" 
+                                          onclick="updateCalculatedPrice('${rate.id}', '${room.id}', '${dateKey}', '')"
+                                          style="font-size:10px; color:#ef4444; position:absolute; top:0; right:0px; cursor:pointer; background:#fff; border:1px solid #ef4444; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
+                    } else if (isLevelDerived) {
+                        // highlight that it comes from level?
+                        inputStyle += 'border-color:#3b82f6; color:#1d4ed8;';
+                    }
+
+                    roomRowHtml += `<td style="text-align:center; position:relative;">
+                        ${indicator}
+                        <input type="number" 
+                               value="${val}"
+                               onchange="updateCalculatedPrice('${rate.id}', '${room.id}', '${dateKey}', this.value)"
+                               style="${inputStyle}"
+                        >
+                    </td>`;
+                });
+                tbody.innerHTML += `<tr style="background:${cluster.color}; border-top:1px solid #cbd5e1;">${roomRowHtml}</tr>`;
+
+                // Options... (Logic same as before, no levels for options yet unless we add Option Prices to Levels too?)
+                // User said "Rate Levels". Usually applies to Base Rate. Options usually stay fixed addons.
+                // Keeping Options logic as is (Base Config + Override).
+
+                const options = room.options || [];
+                options.forEach(opt => {
+                    let optRowHtml = `<td style="padding-left:32px; font-size:11px; color:#475569; border-right:1px solid #cbd5e1;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <span>↳ ${opt.name}</span>
+                        </div>
+                     </td>`;
+
+                    store.days.forEach(day => {
+                        const dateKey = day.date;
+                        let finalVal = 0;
+
+                        // Check Option Override
+                        const optOverrideKey = `${room.id}_${opt.id}_${dateKey}`;
+                        const isOptOverridden = rate.optionOverrides && rate.optionOverrides[optOverrideKey] !== undefined;
+
+                        if (isOptOverridden) {
+                            finalVal = rate.optionOverrides[optOverrideKey];
+                        } else {
+                            // Check Rate Plan Configured Option Price
+                            const optConfigKey = `${room.id}_${opt.id}`;
+                            const hasConfigPrice = rate.optionPrices && rate.optionPrices[optConfigKey] !== undefined;
+
+                            if (hasConfigPrice) {
+                                finalVal = rate.optionPrices[optConfigKey];
+                            } else {
+                                finalVal = 0;
+                            }
+                        }
+
+                        let cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px; color:#64748b; border:1px solid #e2e8f0;';
+                        let optIndicator = '';
+
+                        if (isOptOverridden) {
+                            cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #f59e0b; background:#fffbeb; color:#b45309; font-weight:bold; border-radius:4px;';
+                            optIndicator = `<div title="Clear Option Override" 
+                                                 onclick="updateOptionOverride('${rate.id}', '${room.id}', '${opt.id}', '${dateKey}', '')"
+                                                 style="font-size:10px; color:#f59e0b; position:absolute; top:-6px; right:0px; cursor:pointer; background:#fff; border:1px solid #f59e0b; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
+                        }
+
+                        optRowHtml += `<td style="text-align:center; position:relative;">
+                            ${optIndicator}
+                            <input type="number" 
+                                   value="${finalVal}"
+                                   onchange="updateOptionOverride('${rate.id}', '${room.id}', '${opt.id}', '${dateKey}', this.value)"
+                                   style="${cellStyle}"
+                            >
+                        </td>`;
+                    });
+                    tbody.innerHTML += `<tr style="background:${cluster.color}; border-bottom:1px solid #f1f5f9;">${optRowHtml}</tr>`;
+                });
+            });
+        });
+    });
+}

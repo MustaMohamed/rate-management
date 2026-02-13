@@ -8,6 +8,13 @@ const DEFAULT_STORE = {
     barRoomId: 'r1',
     pricingModel: 'standard', // 'standard' or 'exact'
 
+    // Rate Levels
+    rateLevels: [
+        { id: 'l1', name: 'Level 1', baseValue: 80, roomPrices: {} },
+        { id: 'l2', name: 'Level 2', baseValue: 100, roomPrices: {} },
+        { id: 'l3', name: 'Level 3', baseValue: 120, roomPrices: {} }
+    ],
+
     // Defined Clusters
     clusters: [
         { id: 'c1', name: 'Standard', color: '#bfdbfe' }, // Distinct Blue
