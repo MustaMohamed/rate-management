@@ -12,7 +12,7 @@ function init() {
     // Render Views
     renderRoomsTable();
     renderRatesTable();
-    // renderBasePriceMatrix(); // Renamed/Recurposed
+    renderBasePriceMatrix(); // Renamed/Recurposed
     renderMatrix();
 
     updateStats();
@@ -66,7 +66,7 @@ function switchView(viewName, element) {
     // Render Views based on the active view
     renderRoomsTable();
     renderRatesTable();
-    // renderBasePriceMatrix(); // Kept if relevant to Plans, but removed if Levels related
+    renderBasePriceMatrix(); // Kept if relevant to Plans, but removed if Levels related
     renderMatrix();
 
 
