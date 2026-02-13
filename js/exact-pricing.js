@@ -66,10 +66,7 @@ function switchView(viewName, element) {
     renderRoomsTable();
     renderRatesTable();
     renderBasePriceMatrix();
-    // Only render levels grid if it's the active view or needed for other views
-    if (viewName === 'levels') {
-        renderLevelsGrid();
-    }
+    // Levels logic removed
     renderMatrix();
 
     // Update Stats
@@ -475,97 +472,8 @@ function renderMatrix() {
     });
 }
 
-/* --- RATE LEVEL LOGIC (EXACT) --- */
-function renderLevelsGrid() {
-    const thead = document.getElementById('levelsGridHead');
-    const tbody = document.getElementById('levelsGridBody');
-    if (!thead || !tbody) return;
-
-    // Headers
-    let headerHtml = '<tr><th style="min-width:120px;">Level Name</th>';
-    store.rooms.forEach(room => {
-        headerHtml += `<th style="text-align:center; min-width:80px;">${room.code}</th>`;
-    });
-    headerHtml += '<th style="width:80px;">Actions</th></tr>';
-    thead.innerHTML = headerHtml;
-
-    // Body
-    tbody.innerHTML = '';
-    const levels = store.rateLevels || [];
-
-    levels.forEach((l, idx) => {
-        let rowHtml = `<td>
-            <input type="text" value="${l.name}" class="matrix-input" onchange="updateRateLevel(${idx}, 'name', this.value)" style="width:100%;">
-        </td>`;
-
-        store.rooms.forEach(room => {
-            const price = (l.roomPrices && l.roomPrices[room.id] !== undefined) ? l.roomPrices[room.id] : '';
-            rowHtml += `<td style="text-align:center;">
-                <input type="number" value="${price}" class="matrix-input" 
-                       placeholder="-"
-                       onchange="updateLevelRoomPrice(${idx}, '${room.id}', this.value)" 
-                       style="width:80px;">
-            </td>`;
-        });
-
-        rowHtml += `<td>
-             <button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger); padding:4px 8px;" onclick="deleteRateLevel(${idx})">Del</button>
-        </td>`;
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = rowHtml;
-        tbody.appendChild(tr);
-    });
-}
-
-function updateLevelRoomPrice(levelIdx, roomId, val) {
-    if (store.rateLevels[levelIdx]) {
-        if (!store.rateLevels[levelIdx].roomPrices) store.rateLevels[levelIdx].roomPrices = {};
-
-        if (val === '') delete store.rateLevels[levelIdx].roomPrices[roomId];
-        else store.rateLevels[levelIdx].roomPrices[roomId] = parseFloat(val);
-
-        saveStore();
-        renderMatrix(); // update sim if this level is used
-    }
-}
-
-function updateRateLevel(idx, field, value) {
-    if (store.rateLevels[idx]) {
-        store.rateLevels[idx][field] = value;
-        saveStore();
-        renderMatrix();
-    }
-}
-
-function addRateLevel() {
-    if (!store.rateLevels) store.rateLevels = [];
-    const len = store.rateLevels.length + 1;
-    store.rateLevels.push({
-        id: 'l' + Date.now(),
-        name: 'Level ' + len,
-        baseValue: 100, // unused in exact but kept for structure
-        roomPrices: {}
-    });
-    saveStore();
-    renderLevelsGrid();
-    renderMatrix();
-}
-
-function deleteRateLevel(idx) {
-    store.rateLevels.splice(idx, 1);
-    saveStore();
-    renderLevelsGrid();
-    renderMatrix();
-}
-
-function applyDailyLevel(date, levelId) {
-    if (!store.dailyLevels) store.dailyLevels = {};
-    if (levelId === '') delete store.dailyLevels[date];
-    else store.dailyLevels[date] = levelId;
-    saveStore();
-    renderMatrix();
-}
+/* --- RATE LEVEL LOGIC REMOVED --- */
+// (This section has been removed as per user request to drop Rate Levels from Exact Model)
 
 // Override Handler Wrapper
 function updateCalculatedPrice(rateId, roomId, date, val) {
