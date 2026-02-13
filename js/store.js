@@ -27,15 +27,15 @@ const DEFAULT_STORE = {
         {
             id: 'r1', code: 'STD', name: 'Standard Room', cluster: 'c1',
             options: [
-                { id: 'o1', name: 'King Bed', delta: 0 },
-                { id: 'o2', name: 'Twin Bed', delta: 0 }
+                { id: 'o1', name: 'King Bed', delta: { type: 'fixed', value: 0 } },
+                { id: 'o2', name: 'Twin Bed', delta: { type: 'fixed', value: 0 } }
             ]
         },
         {
             id: 'r2', code: 'STV', name: 'Standard View', cluster: 'c1',
             options: [
-                { id: 'o4', name: 'Garden View', delta: 0 },
-                { id: 'o5', name: 'Pool View', delta: 20 }
+                { id: 'o4', name: 'Garden View', delta: { type: 'fixed', value: 0 } },
+                { id: 'o5', name: 'Pool View', delta: { type: 'fixed', value: 20 } }
             ]
         },
 
@@ -43,22 +43,22 @@ const DEFAULT_STORE = {
         {
             id: 'r3', code: 'SUP', name: 'Superior Room', cluster: 'c2',
             options: [
-                { id: 'o6', name: 'King Bed', delta: 0 },
-                { id: 'o7', name: 'Twin Bed', delta: 0 }
+                { id: 'o6', name: 'King Bed', delta: { type: 'fixed', value: 0 } },
+                { id: 'o7', name: 'Twin Bed', delta: { type: 'fixed', value: 0 } }
             ]
         },
         {
             id: 'r4', code: 'DLX', name: 'Deluxe Room', cluster: 'c2',
             options: [
-                { id: 'o9', name: 'City View', delta: 0 },
-                { id: 'o10', name: 'Ocean View', delta: 40 }
+                { id: 'o9', name: 'City View', delta: { type: 'fixed', value: 0 } },
+                { id: 'o10', name: 'Ocean View', delta: { type: 'percent', value: 20 } } // Example Percent
             ]
         },
         {
             id: 'r5', code: 'JSU', name: 'Junior Suite', cluster: 'c2',
             options: [
-                { id: 'o13', name: 'Standard', delta: 0 },
-                { id: 'o14', name: 'Panorama', delta: 60 }
+                { id: 'o13', name: 'Standard', delta: { type: 'fixed', value: 0 } },
+                { id: 'o14', name: 'Panorama', delta: { type: 'fixed', value: 60 } }
             ]
         },
 
@@ -66,15 +66,15 @@ const DEFAULT_STORE = {
         {
             id: 'r6', code: 'EXS', name: 'Executive Suite', cluster: 'c3',
             options: [
-                { id: 'o15', name: 'One Bedroom', delta: 0 },
-                { id: 'o16', name: 'Two Bedroom', delta: 150 }
+                { id: 'o15', name: 'One Bedroom', delta: { type: 'fixed', value: 0 } },
+                { id: 'o16', name: 'Two Bedroom', delta: { type: 'fixed', value: 150 } }
             ]
         },
         {
             id: 'r7', code: 'PRS', name: 'Presidential Suite', cluster: 'c3',
             options: [
-                { id: 'o18', name: 'Penthouse', delta: 0 },
-                { id: 'o19', name: 'Royal Wing', delta: 500 }
+                { id: 'o18', name: 'Penthouse', delta: { type: 'fixed', value: 0 } },
+                { id: 'o19', name: 'Royal Wing', delta: { type: 'fixed', value: 500 } }
             ]
         }
     ],
@@ -82,12 +82,12 @@ const DEFAULT_STORE = {
         {
             id: 'p1', code: 'BAR', name: 'Best Available Rate', type: 'source',
             supplements: {
-                r2: 10,  // Standard View
-                r3: 30,  // Superior
-                r4: 50,  // Deluxe
-                r5: 100, // Junior Suite
-                r6: 200, // Exec Suite
-                r7: 300  // Presidential
+                r2: { type: 'fixed', value: 10 },    // Standard View ($)
+                r3: { type: 'fixed', value: 30 },    // Superior ($)
+                r4: { type: 'fixed', value: 50 },    // Deluxe ($)
+                r5: { type: 'percent', value: 60 },  // Junior Suite (%) - Example mixed
+                r6: { type: 'fixed', value: 200 },   // Exec Suite ($)
+                r7: { type: 'fixed', value: 300 }    // Presidential ($)
             }
         },
         { id: 'p2', code: 'NREF', name: 'Non-Refundable', type: 'derived', parent: 'p1', rule: 'percent', value: -10, supplements: {} },

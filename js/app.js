@@ -272,10 +272,6 @@ function deleteRate(idx) {
 function renderSupplementMatrix() {
     // 1. Check Mode
     const isExact = store.pricingModel === 'exact';
-    const container = document.getElementById('suppMatrixTable').parentElement;
-
-    // Simplistic handling: If exact mode, hide table content and show message overlay?
-    // Or clear table and put a row saying NA.
 
     const thead = document.getElementById('suppMatrixHead');
     const tbody = document.getElementById('suppMatrixBody');
@@ -303,11 +299,9 @@ function renderSupplementMatrix() {
     tbody.innerHTML = '';
 
     store.clusters.forEach(cluster => {
-        // Find rooms in this cluster
         const clusterRooms = store.rooms.filter(r => (r.cluster || 'c1') === cluster.id);
         if (clusterRooms.length === 0) return;
 
-        // Cluster Header
         const bgColor = cluster.color || '#f1f5f9';
         tbody.innerHTML += `<tr style="background:${bgColor}; border-top:2px solid #e2e8f0; border-bottom:1px solid #e2e8f0;">
             <td colspan="${store.rates.length + 1}" style="font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px; padding:8px 12px;">
@@ -329,27 +323,43 @@ function renderSupplementMatrix() {
                     if (isBar) {
                         roomRowHtml += `<td style="text-align:center; background:#f0fdf4; color:#166534; font-size:11px;">Anchor Base</td>`;
                     } else {
-                        const val = rate.supplements && rate.supplements[room.id] !== undefined ? rate.supplements[room.id] : '';
-                        const style = val !== '' ? 'font-weight:bold; border-color:#3b82f6;' : '';
+                        // Handle Object {type, value} or number
+                        let supp = { type: 'fixed', value: 0 };
+                        if (rate.supplements && rate.supplements[room.id] !== undefined) {
+                            const raw = rate.supplements[room.id];
+                            if (typeof raw === 'object') supp = raw;
+                            else supp = { type: 'fixed', value: raw };
+                        }
+
+                        // Style for active supplements
+                        const style = supp.value !== 0 ? 'font-weight:bold; border-color:#3b82f6;' : '';
+
                         roomRowHtml += `<td style="text-align:center;">
-                            <input type="number" class="matrix-input" style="width:80px; ${style}" 
-                                   placeholder="0" value="${val}"
-                                   onchange="updateSupplementGrid('${rate.id}', '${room.id}', this.value)">
+                            <div style="display:flex; align-items:center; justify-content:center; gap:2px;">
+                                <input type="number" class="matrix-input" style="width:60px; text-align:right; ${style}" 
+                                       placeholder="0" value="${supp.value}"
+                                       onchange="updatePlanSupplement('${rate.id}', '${room.id}', 'value', this.value)">
+                                <select onchange="updatePlanSupplement('${rate.id}', '${room.id}', 'type', this.value)" 
+                                        style="font-size:10px; border:1px solid #cbd5e1; border-radius:4px; padding:2px; height:24px;">
+                                    <option value="fixed" ${supp.type === 'fixed' ? 'selected' : ''}>$</option>
+                                    <option value="percent" ${supp.type === 'percent' ? 'selected' : ''}>%</option>
+                                </select>
+                            </div>
                         </td>`;
                     }
                 } else {
-                    // Derived - Always assume Day 1 Base Rate for reference to show something
-                    const baseRef = store.days[0] ? store.days[0].baseRate : 100;
-                    const calcPrice = resolveRatePrice(rate, baseRef, store.rates, room, null); // passing null date for generic calc
+                    // Derived
+                    const dummyBase = store.days[0] ? store.days[0].baseRate : 100; // Just for display
+                    const calcPrice = resolveRatePrice(rate, dummyBase, store.rates, room, null);
                     roomRowHtml += `<td style="text-align:center; color:#475569; font-size:11px;">
-                        <div style="font-weight:500;">$${calcPrice.toFixed(0)}</div>
+                        <div style="font-weight:500;">Est. $${calcPrice.toFixed(0)}</div>
                         <div style="font-size:9px; color:#94a3b8;">Derived</div>
                     </td>`;
                 }
             });
 
             const tr = document.createElement('tr');
-            if (cluster.color) tr.style.backgroundColor = cluster.color;
+            if (cluster.color) tr.style.backgroundColor = cluster.color; // lighten?
             tr.innerHTML = roomRowHtml;
             tbody.appendChild(tr);
 
@@ -362,26 +372,34 @@ function renderSupplementMatrix() {
                         </div>
                      </td>`;
 
+                    const delta = (typeof opt.delta === 'object') ? opt.delta : { type: 'fixed', value: opt.delta || 0 };
+
                     store.rates.forEach(rate => {
                         const isSource = rate.type === 'source';
-
                         if (isSource) {
-                            // EDITABLE for Source Rate (Global Delta for now)
                             optRowHtml += `<td style="text-align:center;">
-                                <input type="number" class="matrix-input" style="width:70px; font-size:11px;" 
-                                       value="${opt.delta}"
-                                       onchange="updateOptionDelta('${room.id}', '${opt.id}', this.value)">
+                                <div style="display:flex; align-items:center; justify-content:center; gap:2px;">
+                                    <input type="number" class="matrix-input" style="width:50px; text-align:right; font-size:11px;" 
+                                           value="${delta.value}"
+                                           onchange="updateRoomOption('${room.id}', '${opt.id}', 'value', this.value)">
+                                    <select onchange="updateRoomOption('${room.id}', '${opt.id}', 'type', this.value)" 
+                                            style="font-size:10px; border:1px solid #cbd5e1; border-radius:4px; padding:2px; height:24px;">
+                                        <option value="fixed" ${delta.type === 'fixed' ? 'selected' : ''}>$</option>
+                                        <option value="percent" ${delta.type === 'percent' ? 'selected' : ''}>%</option>
+                                    </select>
+                                </div>
                              </td>`;
                         } else {
-                            // Derived
+                            // Derived Options
+                            const suffix = delta.type === 'percent' ? '%' : '$';
                             optRowHtml += `<td style="text-align:center; opacity:0.7; font-size:11px;">
-                                + $${opt.delta}
+                                + ${delta.value}${suffix}
                              </td>`;
                         }
                     });
 
                     const optTr = document.createElement('tr');
-                    if (cluster.color) optTr.style.backgroundColor = cluster.color;
+                    // slightly lighter bg for options?
                     optTr.innerHTML = optRowHtml;
                     tbody.appendChild(optTr);
                 });
@@ -390,33 +408,46 @@ function renderSupplementMatrix() {
     });
 }
 
-function updateOptionDelta(roomId, optId, val) {
+function updateRoomOption(roomId, optId, field, val) {
     const room = store.rooms.find(r => r.id === roomId);
     if (!room) return;
     const opt = room.options.find(o => o.id === optId);
     if (opt) {
-        opt.delta = parseFloat(val) || 0;
+        if (typeof opt.delta !== 'object') {
+            opt.delta = { type: 'fixed', value: opt.delta || 0 };
+        }
+
+        if (field === 'value') opt.delta.value = parseFloat(val);
+        else opt.delta.type = val;
+
         saveStore();
         renderSupplementMatrix();
         renderMatrix();
     }
 }
 
-function updateSupplementGrid(rateId, roomId, value) {
-    const rate = store.rates.find(r => r.id === rateId);
+function updatePlanSupplement(planId, roomId, field, val) {
+    const rate = store.rates.find(r => r.id === planId);
     if (!rate) return;
-
     if (!rate.supplements) rate.supplements = {};
 
-    if (value.trim() === '') {
-        delete rate.supplements[roomId];
-    } else {
-        rate.supplements[roomId] = parseFloat(value);
+    // Ensure object exists
+    if (!rate.supplements[roomId] || typeof rate.supplements[roomId] !== 'object') {
+        const existingVal = (typeof rate.supplements[roomId] === 'number') ? rate.supplements[roomId] : 0;
+        rate.supplements[roomId] = { type: 'fixed', value: existingVal };
     }
 
+    if (field === 'value') {
+        rate.supplements[roomId].value = parseFloat(val);
+    } else {
+        rate.supplements[roomId].type = val;
+    }
+
+    // Cleanup if 0 fixed? No, let's keep explicit 0 fixed.
+
     saveStore();
-    renderSupplementMatrix(); // Re-render to update styles
-    renderMatrix(); // Update Simulation
+    renderSupplementMatrix();
+    renderMatrix();
 }
 
 /* --- RATE MATRIX SIMULATION --- */
@@ -740,6 +771,10 @@ function updateAnchorRate(date, val) {
     renderMatrix(); // re-render to potentially update level dropdown to "Custom"
 }
 
+/* --- RATE MATRIX SIMULATION --- */
+
+// ... previous code ...
+
 function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {
     // 1. Check Overrides (Priority 1 for both modes)
     if (date && targetRate.overrides) {
@@ -749,8 +784,9 @@ function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {
 
     // 2. Exact Mode Logic
     if (store.pricingModel === 'exact') {
-        // In exact mode, if there's no override, the price is effectively 0 or unset.
-        // We do NOT derive from parents.
+        // ... (Exact Mode simplified logic, usually 0 or from Level) ...
+        // Wait, current exact logic in renderMatrix handles levels directly. 
+        // This function is mostly for Standard Mode calculation.
         return 0;
     }
 
@@ -758,18 +794,25 @@ function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {
     if (targetRate.type === 'source') {
         if (room.id === store.barRoomId) return anchorValue;
 
-        // Supplement strictly from rate
-        let supp = 0;
+        // Supplement Logic (Fixed vs Percent)
+        let supp = { type: 'fixed', value: 0 };
         if (targetRate.supplements && targetRate.supplements[room.id] !== undefined) {
-            supp = targetRate.supplements[room.id];
+            const raw = targetRate.supplements[room.id];
+            if (typeof raw === 'object') supp = raw;
+            else supp = { type: 'fixed', value: raw };
         }
-        return anchorValue + supp;
+
+        if (supp.type === 'percent') {
+            return anchorValue * (1 + (supp.value / 100)); // e.g. 100 * 1.2 = 120
+        } else {
+            return anchorValue + supp.value; // e.g. 100 + 20 = 120, or 100 + (-10) = 90
+        }
     }
 
     const parentRate = allRates.find(r => r.id === targetRate.parent);
     if (!parentRate) return anchorValue;
 
-    // IMPORTANT: Pass room AND date context down
+    // Recursive resolution
     const parentPrice = resolveRatePrice(parentRate, anchorValue, allRates, room, date);
 
     if (targetRate.rule === 'percent') {
