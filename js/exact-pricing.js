@@ -12,7 +12,7 @@ function init() {
     // Render Views
     renderRoomsTable();
     renderRatesTable();
-    renderBasePriceMatrix(); // Renamed/Recurposed
+    // renderBasePriceMatrix(); // Renamed/Recurposed
     renderMatrix();
 
     updateStats();
@@ -43,12 +43,14 @@ function switchView(viewName, element) {
             dashboard: 0,
             rooms: 1,
             rates: 2,
-            levels: 3, // Assuming 'levels' is the 4th nav item
-            matrix: 4
+            matrix: 3
         };
-        if (indexMap[viewName] !== undefined && navItems[indexMap[viewName]]) {
+        // removed levels: 3 as per user request
+        if (indexMap[viewName] !== undefined) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            navItems[indexMap[viewName]].classList.add('active');
+            // Safety: ensure nav item exists
+            const idx = indexMap[viewName];
+            if (navItems[idx]) navItems[idx].classList.add('active');
         }
     }
 
@@ -57,7 +59,6 @@ function switchView(viewName, element) {
         dashboard: 'Overview (Exact Pricing)',
         rooms: 'Room Type Configuration',
         rates: 'Rate Plan Management',
-        levels: 'Rate Level Ladder',
         matrix: 'Rate Grid & Inventory'
     };
     document.getElementById('pageTitle').innerText = titles[viewName] || 'Enterprise Rate Manager';
@@ -65,9 +66,9 @@ function switchView(viewName, element) {
     // Render Views based on the active view
     renderRoomsTable();
     renderRatesTable();
-    renderBasePriceMatrix();
-    // Levels logic removed
+    // renderBasePriceMatrix(); // Kept if relevant to Plans, but removed if Levels related
     renderMatrix();
+
 
     // Update Stats
     updateStats();
@@ -509,10 +510,10 @@ function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
 
 /* --- RATE MATRIX SIMULATION (EXACT) --- */
+/* --- RATE MATRIX SIMULATION (EXACT) --- */
 function renderMatrix() {
     const thead = document.getElementById('matrixThead');
     const tbody = document.getElementById('matrixTbody');
-    const levels = store.rateLevels || [];
 
     // 1. HEADERS (DATES)
     let headerHtml = '<th style="min-width:200px;">Rate Product</th>';
@@ -523,29 +524,6 @@ function renderMatrix() {
 
     // 2. BODY
     tbody.innerHTML = '';
-
-    // ROW A: LEVEL SELECTOR
-    let levelRow = `<tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
-        <td style="padding-top:12px; padding-bottom:12px;">
-            <strong style="color:#64748b;">Daily Pricing Level</strong>
-            <div style="font-size:10px; color:#94a3b8;">Apply fixed prices</div>
-        </td>`;
-
-    store.days.forEach(day => {
-        const currentLvl = (store.dailyLevels && store.dailyLevels[day.date]) ? store.dailyLevels[day.date] : '';
-        let options = `<option value="">- Custom -</option>`;
-        levels.forEach(l => {
-            options += `<option value="${l.id}" ${currentLvl === l.id ? 'selected' : ''}>${l.name}</option>`;
-        });
-
-        levelRow += `<td style="text-align:center;">
-            <select style="width:100%; font-size:11px; padding:4px; border:1px solid #cbd5e1; border-radius:4px;"
-                    onchange="applyDailyLevel('${day.date}', this.value)">
-                ${options}
-            </select>
-        </td>`;
-    });
-    tbody.innerHTML += levelRow;
 
     // PRODUCT GRID
     store.rates.forEach(rate => {
@@ -576,31 +554,18 @@ function renderMatrix() {
                 store.days.forEach(day => {
                     const dateKey = day.date;
 
-                    // Logic: 
-                    // 1. Daily Override (Highest)
-                    // 2. Daily Level (Middle) -> Look up room price in level
-                    // 3. Base Price Config (Lowest)
-
+                    // Logic: Base Price (from config) OR Override (from grid)
                     let val = 0;
-                    let isLevelDerived = false;
 
+                    // 1. Check Daily Override
                     const overrideKey = `${room.id}_${dateKey}`;
                     const hasOverride = rate.overrides && rate.overrides[overrideKey] !== undefined;
 
                     if (hasOverride) {
                         val = rate.overrides[overrideKey];
                     } else {
-                        // Check Level
-                        const lvlId = (store.dailyLevels && store.dailyLevels[dateKey]);
-                        const level = levels.find(l => l.id === lvlId);
-
-                        if (level && level.roomPrices && level.roomPrices[room.id] !== undefined) {
-                            val = level.roomPrices[room.id];
-                            isLevelDerived = true;
-                        } else {
-                            // Fallback to Base Price
-                            val = (rate.basePrices && rate.basePrices[room.id] !== undefined) ? rate.basePrices[room.id] : 0;
-                        }
+                        // 2. Fallback to Rate Plan Base Price
+                        val = (rate.basePrices && rate.basePrices[room.id] !== undefined) ? rate.basePrices[room.id] : 0;
                     }
 
                     let inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
@@ -608,12 +573,10 @@ function renderMatrix() {
 
                     if (hasOverride) {
                         inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #ef4444; background:#fef2f2; color:#b91c1c; font-weight:bold; border-radius:4px;';
+                        // Add X button to clear override
                         indicator = `<div title="Clear Override" 
                                           onclick="updateCalculatedPrice('${rate.id}', '${room.id}', '${dateKey}', '')"
                                           style="font-size:10px; color:#ef4444; position:absolute; top:0; right:0px; cursor:pointer; background:#fff; border:1px solid #ef4444; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
-                    } else if (isLevelDerived) {
-                        // highlight that it comes from level?
-                        inputStyle += 'border-color:#3b82f6; color:#1d4ed8;';
                     }
 
                     roomRowHtml += `<td style="text-align:center; position:relative;">

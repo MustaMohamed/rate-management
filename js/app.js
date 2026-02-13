@@ -16,7 +16,7 @@ function init() {
     renderRoomsTable();
     renderRatesTable();
     renderSupplementMatrix();
-    renderLevelsTable();
+    // renderLevelsTable(); // Removed
     renderMatrix();
 
     // Update Stats
