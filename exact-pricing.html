@@ -19,9 +19,7 @@
             <div class="nav-item" onclick="switchView('rates', this)">
                 <span class="nav-icon">🏷️</span> Rate Plans
             </div>
-            <div class="nav-item" onclick="switchView('levels', this)">
-                <span class="nav-icon">📊</span> Rate Levels
-            </div>
+            <!-- Removed Rate Levels Link -->
             <div class="nav-item" onclick="switchView('matrix', this)">
                 <span class="nav-icon">📅</span> Rates Grid (Matrix)
             </div>
@@ -134,29 +132,7 @@
                 </div>
             </div>
 
-            <!-- RATE LEVELS VIEW -->
-            <div id="view-levels" class="view-section">
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Rate Levels (Exact Pricing)</div>
-                        <div style="font-size:12px; opacity:0.7;">Define fixed price points for all room types.</div>
-                    </div>
-                    <div style="padding:16px;">
-                        <button class="btn btn-primary" style="margin-bottom:16px;" onclick="addRateLevel()">+ Add
-                            Level</button>
-                        <div style="overflow-x:auto;">
-                            <table class="table" id="levelsGrid">
-                                <thead id="levelsGridHead">
-                                    <!-- Dynamic Columns: Level Name | Room 1 | Room 2 ... | Actions -->
-                                </thead>
-                                <tbody id="levelsGridBody">
-                                    <!-- JS Populated -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- RATE LEVELS VIEW REMOVED -->
 
             <!-- VIEW: MATRIX -->
             <div id="view-matrix" class="view-section">
