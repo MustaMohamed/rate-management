@@ -1,10 +1,10 @@
-/* --- APP ENGINE (EXACT PRICING) --- */
+/* --- APP ENGINE (EXPLICIT PRICING) --- */
 
 function init() {
     if (typeof initStore === 'function') {
         initStore();
-        // Force exact mode for this view
-        store.pricingModel = 'exact';
+        // Force explicit mode for this view
+        store.pricingModel = 'explicit';
     } else {
         return;
     }
@@ -56,7 +56,7 @@ function switchView(viewName, element) {
 
     // Update Title
     const titles = {
-        dashboard: 'Overview (Exact Pricing)',
+        dashboard: 'Overview (Explicit Pricing)',
         rooms: 'Room Type Configuration',
         rates: 'Rate Plan Management',
         matrix: 'Rate Grid & Inventory'
@@ -145,12 +145,12 @@ function deleteRoom(idx) {
 }
 
 
-/* --- RATE PLAN CONFIGURATION (EXACT) --- */
+/* --- RATE PLAN CONFIGURATION (EXPLICIT) --- */
 function renderRatesTable() {
     const tbody = document.getElementById('ratesTableBody');
     tbody.innerHTML = '';
 
-    // Clean up header for exact mode
+    // Clean up header for explicit mode
     const tableHeader = document.querySelector('#ratesTable thead tr');
     if (tableHeader) {
         const headers = tableHeader.querySelectorAll('th');
@@ -162,7 +162,7 @@ function renderRatesTable() {
         tr.innerHTML = `
             <td><strong>${rate.code}</strong></td>
             <td>${rate.name}</td>
-            <td>Fixed / Exact</td>
+            <td>Fixed / Explicit</td>
             <td><span class="badge badge-gray">Manual Pricing</span></td>
             <td>
                 <button class="btn btn-outline" style="padding:4px 8px; font-size:12px; color:var(--danger); border-color:var(--danger);" onclick="deleteRate(${idx})">Delete</button>
@@ -176,7 +176,7 @@ function renderRatesTable() {
 function openRateModal() {
     document.getElementById('m_rate_name').value = '';
     document.getElementById('m_rate_code').value = '';
-    // Exact mode doesn't sidebar derivation options
+    // Explicit mode doesn't sidebar derivation options
     document.getElementById('derivationOptions').style.display = 'none';
     document.getElementById('rateModal').style.display = 'flex';
 }
@@ -191,7 +191,7 @@ function saveRate() {
         id: 'p' + Date.now(),
         name,
         code,
-        type: 'exact', // Custom type for this logic
+        type: 'explicit', // Custom type for this logic
         basePrices: {}, // Replaces supplements
         overrides: {},
         optionOverrides: {}
@@ -333,152 +333,13 @@ function updateOptionBasePrice(rateId, roomId, optId, value) {
 }
 
 
-/* --- RATE MATRIX SIMULATION (EXACT) --- */
-function renderMatrix() {
-    const thead = document.getElementById('matrixThead');
-    const tbody = document.getElementById('matrixTbody');
-
-    // 1. HEADERS (DATES)
-    let headerHtml = '<th style="min-width:200px;">Rate Product</th>';
-    store.days.forEach(day => {
-        headerHtml += `<th style="text-align:center; min-width:80px;">${day.date}</th>`;
-    });
-    thead.innerHTML = headerHtml;
-
-    // 2. BODY
-    tbody.innerHTML = '';
-
-    // No Global Anchor Row in Exact Mode
-
-    // PRODUCT GRID
-    store.rates.forEach(rate => {
-        // Rate Header
-        tbody.innerHTML += `<tr style="background:#f1f5f9;"><td colspan="${store.days.length + 1}" style="font-size:12px; font-weight:bold; letter-spacing:0.5px; text-transform:uppercase; color:#4f46e5; padding-top:16px; border-bottom: 1px solid #e2e8f0;">
-            ${rate.name} 
-            <div style="font-size:10px; opacity:0.6; font-weight:normal;">${rate.code}</div>
-        </td></tr>`;
-
-        // Clusters
-        const clusters = store.clusters || [{ id: 'c1', name: 'Default' }];
-        clusters.forEach(cluster => {
-            const clusterRooms = store.rooms.filter(r => (r.cluster || 'c1') === cluster.id);
-            if (clusterRooms.length === 0) return;
-
-            const bgColor = cluster.color || '#fff';
-            tbody.innerHTML += `<tr>
-                <td colspan="${store.days.length + 1}" style="font-size:11px; font-weight:600; color:#475569; background:${bgColor}; padding:6px 12px; border-bottom:1px solid #cbd5e1; padding-left:24px;">
-                    ${cluster.name} Cluster
-                </td>
-            </tr>`;
-
-            clusterRooms.forEach(room => {
-                let roomRowHtml = `<td style="border-right:1px solid #cbd5e1;">
-                    <div style="padding-left:12px; font-weight:700; color:#334155; font-size:12px;">${room.name}</div>
-                </td>`;
-
-                store.days.forEach(day => {
-                    const dateKey = day.date;
-
-                    // Logic: Base Price (from config) OR Override (from grid)
-                    let val = 0;
-
-                    // 1. Check Daily Override
-                    const overrideKey = `${room.id}_${dateKey}`;
-                    const hasOverride = rate.overrides && rate.overrides[overrideKey] !== undefined;
-
-                    if (hasOverride) {
-                        val = rate.overrides[overrideKey];
-                    } else {
-                        // 2. Fallback to Rate Plan Base Price
-                        val = (rate.basePrices && rate.basePrices[room.id] !== undefined) ? rate.basePrices[room.id] : 0;
-                    }
-
-                    let inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
-                    let indicator = '';
-
-                    if (hasOverride) {
-                        inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #ef4444; background:#fef2f2; color:#b91c1c; font-weight:bold; border-radius:4px;';
-                        // Add X button to clear override
-                        indicator = `<div title="Clear Override" 
-                                          onclick="updateCalculatedPrice('${rate.id}', '${room.id}', '${dateKey}', '')"
-                                          style="font-size:10px; color:#ef4444; position:absolute; top:0; right:0px; cursor:pointer; background:#fff; border:1px solid #ef4444; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
-                    }
-
-                    roomRowHtml += `<td style="text-align:center; position:relative;">
-                        ${indicator}
-                        <input type="number" 
-                               value="${val}"
-                               onchange="updateCalculatedPrice('${rate.id}', '${room.id}', '${dateKey}', this.value)"
-                               style="${inputStyle}"
-                        >
-                    </td>`;
-                });
-                tbody.innerHTML += `<tr style="background:${cluster.color}; border-top:1px solid #cbd5e1;">${roomRowHtml}</tr>`;
-
-                // Options
-                const options = room.options || [];
-                options.forEach(opt => {
-                    let optRowHtml = `<td style="padding-left:32px; font-size:11px; color:#475569; border-right:1px solid #cbd5e1;">
-                        <div style="display:flex; justify-content:space-between;">
-                            <span>↳ ${opt.name}</span>
-                        </div>
-                     </td>`;
-
-                    store.days.forEach(day => {
-                        const dateKey = day.date;
-                        let finalVal = 0;
-
-                        // Check Option Override (Daily)
-                        const optOverrideKey = `${room.id}_${opt.id}_${dateKey}`;
-                        const isOptOverridden = rate.optionOverrides && rate.optionOverrides[optOverrideKey] !== undefined;
-
-                        if (isOptOverridden) {
-                            finalVal = rate.optionOverrides[optOverrideKey];
-                        } else {
-                            // Check Rate Plan Configured Option Price
-                            const optConfigKey = `${room.id}_${opt.id}`;
-                            const hasConfigPrice = rate.optionPrices && rate.optionPrices[optConfigKey] !== undefined;
-
-                            if (hasConfigPrice) {
-                                finalVal = rate.optionPrices[optConfigKey];
-                            } else {
-                                // NO FALLBACK CALCULATION anymore
-                                finalVal = 0;
-                            }
-                        }
-
-                        let cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px; color:#64748b; border:1px solid #e2e8f0;';
-                        let optIndicator = '';
-
-                        if (isOptOverridden) {
-                            cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #f59e0b; background:#fffbeb; color:#b45309; font-weight:bold; border-radius:4px;';
-                            optIndicator = `<div title="Clear Option Override" 
-                                                 onclick="updateOptionOverride('${rate.id}', '${room.id}', '${opt.id}', '${dateKey}', '')"
-                                                 style="font-size:10px; color:#f59e0b; position:absolute; top:-6px; right:0px; cursor:pointer; background:#fff; border:1px solid #f59e0b; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; z-index:10;">×</div>`;
-                        }
-
-                        optRowHtml += `<td style="text-align:center; position:relative;">
-                            ${optIndicator}
-                            <input type="number" 
-                                   value="${finalVal}"
-                                   onchange="updateOptionOverride('${rate.id}', '${room.id}', '${opt.id}', '${dateKey}', this.value)"
-                                   style="${cellStyle}"
-                            >
-                        </td>`;
-                    });
-                    tbody.innerHTML += `<tr style="background:${cluster.color}; border-bottom:1px solid #f1f5f9;">${optRowHtml}</tr>`;
-                });
-            });
-        });
-    });
-}
 
 /* --- RATE LEVEL LOGIC REMOVED --- */
-// (This section has been removed as per user request to drop Rate Levels from Exact Model)
+// (This section has been removed as per user request to drop Rate Levels from Explicit Model)
 
 // Override Handler Wrapper
 function updateCalculatedPrice(rateId, roomId, date, val) {
-    // In Exact Mode, this is strictly a manual override or clearing it
+    // In Explicit Mode, this is strictly a manual override or clearing it
     const rate = store.rates.find(r => r.id === rateId);
     if (!rate) return;
     if (!rate.overrides) rate.overrides = {};
@@ -509,8 +370,7 @@ function updateOptionOverride(rateId, roomId, optId, date, val) {
 function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
 
-/* --- RATE MATRIX SIMULATION (EXACT) --- */
-/* --- RATE MATRIX SIMULATION (EXACT) --- */
+/* --- RATE MATRIX SIMULATION (EXPLICIT) --- */
 function renderMatrix() {
     const thead = document.getElementById('matrixThead');
     const tbody = document.getElementById('matrixTbody');

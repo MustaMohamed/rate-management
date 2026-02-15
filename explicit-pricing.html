@@ -1,5 +1,5 @@
-<title>Enterprise Rate Manager - Exact Pricing</title>
-<link rel="stylesheet" href="css/exact-styles.css">
+<title>Enterprise Rate Manager - Explicit Pricing</title>
+<link rel="stylesheet" href="css/explicit-styles.css">
 </head>
 
 <body>
@@ -7,7 +7,7 @@
     <!-- SIDEBAR -->
     <div class="sidebar">
         <div class="brand">
-            <span>Rate</span>Manager <span style="font-size:10px; opacity:0.6; margin-left:4px;">(Exact)</span>
+            <span>Rate</span>Manager <span style="font-size:10px; opacity:0.6; margin-left:4px;">(Explicit)</span>
         </div>
         <nav class="nav">
             <div class="nav-item active" onclick="switchView('dashboard', this)">
@@ -29,9 +29,9 @@
     <!-- MAIN CONTENT -->
     <div class="main">
         <div class="top-bar">
-            <div class="page-title" id="pageTitle">Overview (Exact Pricing)</div>
+            <div class="page-title" id="pageTitle">Overview (Explicit Pricing)</div>
             <div>
-                <a href="index.html" class="btn btn-outline">Switch to Standard Model</a>
+                <a href="index.html" class="btn btn-outline">Switch to Derivation Model</a>
                 <button class="btn btn-outline" style="margin-left:12px;">My Hotel (Demo)</button>
             </div>
         </div>
@@ -61,11 +61,12 @@
 
                 <div
                     style="margin-top:32px; padding:24px; background:white; border-radius:12px; border:1px solid var(--border);">
-                    <h2 style="margin-bottom:16px;">Welcome to Exact Pricing Mode</h2>
+                    <h2 style="margin-bottom:16px;">Welcome to Explicit Pricing Mode</h2>
                     <p style="color:var(--text-muted); line-height:1.6;">
-                        This interface allows you to set <strong>exact, fixed prices</strong> for every room type and
+                        This interface allows you to set <strong>explicit, fixed prices</strong> for every room type and
                         date.<br>
-                        Unlike the standard model, there are no formulas or anchor derivations. What you see is exactly
+                        Unlike the derivation model, there are no formulas or anchor derivations. What you see is
+                        exactly
                         what is sent to the channel manager.
                     </p>
                 </div>
@@ -281,7 +282,7 @@
 
     <!-- Scripts -->
     <script src="js/store.js"></script>
-    <script src="js/exact-pricing.js"></script>
+    <script src="js/explicit-pricing.js"></script>
     <script>
         // Start App
         window.addEventListener('DOMContentLoaded', init);

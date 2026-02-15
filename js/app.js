@@ -4,7 +4,7 @@ function init() {
     // Initialize Data Store
     if (typeof initStore === 'function') {
         initStore();
-        store.pricingModel = 'standard';
+        store.pricingModel = 'derivation';
     } else {
         console.error('Store module not loaded');
         return;
@@ -162,7 +162,7 @@ function deleteRoom(idx) {
 function renderRatesTable() {
     const tbody = document.getElementById('ratesTableBody');
     tbody.innerHTML = '';
-    const isExact = store.pricingModel === 'exact';
+    const isExplicit = store.pricingModel === 'explicit';
 
     // Update Header Text if needed? Ideally we manipulate DOM headers too but let's keep it simple.
     // Maybe change the 4th column header dynamically?
@@ -171,7 +171,7 @@ function renderRatesTable() {
         // Headers: Plan Code, Name, Type, Derivation Rule, Actions
         // indices: 0, 1, 2, 3, 4
         const headers = tableHeader.querySelectorAll('th');
-        if (headers[3]) headers[3].innerText = isExact ? 'Pricing Model' : 'Derivation Rule';
+        if (headers[3]) headers[3].innerText = isExplicit ? 'Pricing Model' : 'Derivation Rule';
     }
 
     store.rates.forEach((rate, idx) => {
@@ -179,7 +179,7 @@ function renderRatesTable() {
 
         // Parent Info
         let derivationInfo = '-';
-        if (isExact) {
+        if (isExplicit) {
             derivationInfo = '<span class="badge badge-gray">Manual / Fixed</span>';
         } else {
             if (rate.type === 'derived') {
@@ -192,7 +192,7 @@ function renderRatesTable() {
             }
         }
 
-        let typeLabel = isExact ? 'Fixed' : (rate.type === 'source' ? 'Source' : 'Derived');
+        let typeLabel = isExplicit ? 'Fixed' : (rate.type === 'source' ? 'Source' : 'Derived');
 
         tr.innerHTML = `
             <td><strong>${rate.code}</strong></td>
@@ -271,15 +271,15 @@ function deleteRate(idx) {
 /* --- SUPPLEMENT MATRIX GRID (New Feature) --- */
 function renderSupplementMatrix() {
     // 1. Check Mode
-    const isExact = store.pricingModel === 'exact';
+    const isExplicit = store.pricingModel === 'explicit';
 
     const thead = document.getElementById('suppMatrixHead');
     const tbody = document.getElementById('suppMatrixBody');
 
-    if (isExact) {
+    if (isExplicit) {
         thead.innerHTML = '';
         tbody.innerHTML = `<tr><td style="padding:40px; text-align:center; color:var(--text-muted); font-style:italic;">
-            Supplements are not used in Exact Pricing Mode. Each room and option price is set independently.
+            Supplements are not used in Explicit Pricing Mode. Each room and option price is set independently.
         </td></tr>`;
         return;
     }
@@ -456,7 +456,7 @@ function updatePlanSupplement(planId, roomId, field, val) {
 function renderMatrix() {
     const thead = document.getElementById('matrixThead');
     const tbody = document.getElementById('matrixTbody');
-    const isExact = store.pricingModel === 'exact';
+    const isExplicit = store.pricingModel === 'explicit';
 
     // 1. HEADERS (DATES)
     let headerHtml = '<th style="min-width:200px;">Rate Product</th>';
@@ -496,8 +496,8 @@ function renderMatrix() {
         const isSource = rate.type === 'source';
 
         // Group Header (Rate Plan)
-        let headerDetail = isExact ? 'Fixed Pricing Plan' : (isSource ? 'Source Plan' : 'Derived Plan');
-        let headerColor = isExact ? '#4f46e5' : (isSource ? 'var(--primary)' : '#64748b');
+        let headerDetail = isExplicit ? 'Fixed Pricing Plan' : (isSource ? 'Source Plan' : 'Derived Plan');
+        let headerColor = isExplicit ? '#4f46e5' : (isSource ? 'var(--primary)' : '#64748b');
 
         tbody.innerHTML += `<tr style="background:#f1f5f9;"><td colspan="${store.days.length + 1}" style="font-size:12px; font-weight:bold; letter-spacing:0.5px; text-transform:uppercase; color:${headerColor}; padding-top:16px; border-bottom: 1px solid #e2e8f0;">
             ${rate.name} <span style="font-weight:normal; opacity:0.7; font-size:11px; margin-left:8px;">(${headerDetail})</span>
@@ -525,7 +525,7 @@ function renderMatrix() {
 
                 // 1. ROOM ROW (Base Price)
                 let metaInfo = '';
-                if (!isExact && isSource) {
+                if (!isExplicit && isSource) {
                     if (isBarRoom) {
                         metaInfo = `<span style="color:#166534; font-size:10px; background:#dcfce7; padding:2px 4px; border-radius:4px;">Anchor</span>`;
                     } else {
@@ -567,11 +567,11 @@ function renderMatrix() {
                     let inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px;';
                     let indicator = '';
 
-                    if (isExact) {
-                        // EXACT MODE: Everything is an input. 
+                    if (isExplicit) {
+                        // EXPLICIT MODE: Everything is an input. 
                         inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
                     } else {
-                        // STANDARD MODE override styling
+                        // DERIVATION MODE override styling
                         if (isOverridden) {
                             inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #ef4444; background:#fef2f2; color:#b91c1c; font-weight:bold; border-radius:4px;';
                             indicator = `<div title="Clear Override" 
@@ -647,7 +647,7 @@ function renderMatrix() {
                         let cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px; color:#64748b;';
                         let optIndicator = '';
 
-                        if (isExact) {
+                        if (isExplicit) {
                             cellStyle = 'width:60px; text-align:right; padding:4px; border:1px solid #cbd5e1; background:#fff; font-size:11px; border-radius:4px;';
                         } else {
                             if (isOptOverridden) {
@@ -704,7 +704,7 @@ function updateOptionOverride(rateId, roomId, optId, date, val) {
 }
 
 /* --- RATE LEVEL LOGIC REMOVED --- */
-// (This section has been removed as per user request to drop Rate Levels from Standard Model)
+// (This section has been removed as per user request to drop Rate Levels from Derivation Model)
 
 function updateAnchorRate(date, val) {
     if (!store.anchorRates) store.anchorRates = {};
@@ -724,15 +724,15 @@ function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {
         if (targetRate.overrides[key] !== undefined) return targetRate.overrides[key];
     }
 
-    // 2. Exact Mode Logic
-    if (store.pricingModel === 'exact') {
-        // ... (Exact Mode simplified logic, usually 0 or from Level) ...
-        // Wait, current exact logic in renderMatrix handles levels directly. 
-        // This function is mostly for Standard Mode calculation.
+    // 2. Explicit Mode Logic
+    if (store.pricingModel === 'explicit') {
+        // ... (Explicit Mode simplified logic, usually 0 or from Level) ...
+        // Wait, current explicit logic in renderMatrix handles levels directly. 
+        // This function is mostly for Derivation Mode calculation.
         return 0;
     }
 
-    // 3. Standard Mode Derivation logic
+    // 3. Derivation Mode Derivation logic
     if (targetRate.type === 'source') {
         if (room.id === store.barRoomId) return anchorValue;
 

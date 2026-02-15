@@ -6,11 +6,7 @@ const DEFAULT_STORE = {
 
     // Configuration
     barRoomId: 'r1',
-    pricingModel: 'standard', // 'standard' or 'exact'
-
-    // Configuration
-    barRoomId: 'r1',
-    pricingModel: 'standard', // 'standard' or 'exact'
+    pricingModel: 'derivation', // 'derivation' or 'explicit'
 
     // Defined Clusters
     clusters: [
