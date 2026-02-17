@@ -261,7 +261,8 @@ function deleteRate(idx) {
 
 /* --- SUPPLEMENT MATRIX GRID (New Feature) --- */
 function renderSupplementMatrix() {
-
+    const thead = document.getElementById('suppMatrixHead');
+    const tbody = document.getElementById('suppMatrixBody');
 
     // HEADERS (Rates)
     let headerHtml = '<th style="min-width:150px;">Room Type / Rate Plan</th>';
@@ -540,7 +541,8 @@ function renderMatrix() {
                     const overrideKey = `${room.id}_${dateKey}`;
                     const isOverridden = rate.overrides && rate.overrides[overrideKey] !== undefined;
 
-                    const calculatedPrice = resolveRatePrice(rate, day.baseRate, store.rates, room, dateKey);
+                    const anchorVal = (store.anchorRates && store.anchorRates[dateKey] !== undefined) ? store.anchorRates[dateKey] : day.baseRate;
+                    const calculatedPrice = resolveRatePrice(rate, anchorVal, store.rates, room, dateKey);
 
                     // Style logic
                     let inputStyle = 'width:60px; text-align:right; padding:4px; border:1px solid transparent; background:transparent; font-size:11px;';
@@ -606,7 +608,8 @@ function renderMatrix() {
 
                     store.days.forEach(day => {
                         const dateKey = day.date;
-                        const basePrice = resolveRatePrice(rate, day.baseRate, store.rates, room, dateKey);
+                        const anchorVal = (store.anchorRates && store.anchorRates[dateKey] !== undefined) ? store.anchorRates[dateKey] : day.baseRate;
+                        const basePrice = resolveRatePrice(rate, anchorVal, store.rates, room, dateKey);
 
                         const optOverrideKey = `${room.id}_${opt.id}_${dateKey}`;
                         const isOptOverridden = rate.optionOverrides && rate.optionOverrides[optOverrideKey] !== undefined;
