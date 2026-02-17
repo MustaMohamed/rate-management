@@ -162,16 +162,12 @@ function deleteRoom(idx) {
 function renderRatesTable() {
     const tbody = document.getElementById('ratesTableBody');
     tbody.innerHTML = '';
-    const isExplicit = store.pricingModel === 'explicit';
-
-    // Update Header Text if needed? Ideally we manipulate DOM headers too but let's keep it simple.
-    // Maybe change the 4th column header dynamically?
+    // Headers: Plan Code, Name, Type, Derivation Rule, Actions
+    // indices: 0, 1, 2, 3, 4
     const tableHeader = document.querySelector('#ratesTable thead tr');
     if (tableHeader) {
-        // Headers: Plan Code, Name, Type, Derivation Rule, Actions
-        // indices: 0, 1, 2, 3, 4
         const headers = tableHeader.querySelectorAll('th');
-        if (headers[3]) headers[3].innerText = isExplicit ? 'Pricing Model' : 'Derivation Rule';
+        if (headers[3]) headers[3].innerText = 'Derivation Rule'; // Always Derivation Rule
     }
 
     store.rates.forEach((rate, idx) => {
@@ -179,20 +175,16 @@ function renderRatesTable() {
 
         // Parent Info
         let derivationInfo = '-';
-        if (isExplicit) {
-            derivationInfo = '<span class="badge badge-gray">Manual / Fixed</span>';
+        if (rate.type === 'derived') {
+            const parent = store.rates.find(r => r.id === rate.parent);
+            const parentName = parent ? parent.code : 'Unknown';
+            const ruleText = rate.rule === 'percent' ? `${rate.value}%` : `$${rate.value}`;
+            derivationInfo = `Linked to <strong>${parentName}</strong> <span class="badge badge-gray" style="margin-left:4px;">${ruleText}</span>`;
         } else {
-            if (rate.type === 'derived') {
-                const parent = store.rates.find(r => r.id === rate.parent);
-                const parentName = parent ? parent.code : 'Unknown';
-                const ruleText = rate.rule === 'percent' ? `${rate.value}%` : `$${rate.value}`;
-                derivationInfo = `Linked to <strong>${parentName}</strong> <span class="badge badge-gray" style="margin-left:4px;">${ruleText}</span>`;
-            } else {
-                derivationInfo = '<span class="badge badge-blue">Independent Source</span>';
-            }
+            derivationInfo = '<span class="badge badge-blue">Independent Source</span>';
         }
 
-        let typeLabel = isExplicit ? 'Fixed' : (rate.type === 'source' ? 'Source' : 'Derived');
+        let typeLabel = rate.type === 'source' ? 'Source' : 'Derived';
 
         tr.innerHTML = `
             <td><strong>${rate.code}</strong></td>
@@ -270,19 +262,7 @@ function deleteRate(idx) {
 
 /* --- SUPPLEMENT MATRIX GRID (New Feature) --- */
 function renderSupplementMatrix() {
-    // 1. Check Mode
-    const isExplicit = store.pricingModel === 'explicit';
 
-    const thead = document.getElementById('suppMatrixHead');
-    const tbody = document.getElementById('suppMatrixBody');
-
-    if (isExplicit) {
-        thead.innerHTML = '';
-        tbody.innerHTML = `<tr><td style="padding:40px; text-align:center; color:var(--text-muted); font-style:italic;">
-            Supplements are not used in Explicit Pricing Mode. Each room and option price is set independently.
-        </td></tr>`;
-        return;
-    }
 
     // HEADERS (Rates)
     let headerHtml = '<th style="min-width:150px;">Room Type / Rate Plan</th>';
@@ -456,7 +436,7 @@ function updatePlanSupplement(planId, roomId, field, val) {
 function renderMatrix() {
     const thead = document.getElementById('matrixThead');
     const tbody = document.getElementById('matrixTbody');
-    const isExplicit = store.pricingModel === 'explicit';
+    const isExplicit = false; // Always standard derivation model
 
     // 1. HEADERS (DATES)
     let headerHtml = '<th style="min-width:200px;">Rate Product</th>';
@@ -724,13 +704,7 @@ function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {
         if (targetRate.overrides[key] !== undefined) return targetRate.overrides[key];
     }
 
-    // 2. Explicit Mode Logic
-    if (store.pricingModel === 'explicit') {
-        // ... (Explicit Mode simplified logic, usually 0 or from Level) ...
-        // Wait, current explicit logic in renderMatrix handles levels directly. 
-        // This function is mostly for Derivation Mode calculation.
-        return 0;
-    }
+
 
     // 3. Derivation Mode Derivation logic
     if (targetRate.type === 'source') {
