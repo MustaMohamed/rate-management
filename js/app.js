@@ -4,7 +4,6 @@ function init() {
     // Initialize Data Store
     if (typeof initStore === 'function') {
         initStore();
-        store.pricingModel = 'derivation';
     } else {
         console.error('Store module not loaded');
         return;
