@@ -130,7 +130,12 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">Daily Rates Matrix (Simulation)</div>
-
+                        <div>
+                            <label style="font-size:13px; color:var(--text-muted); margin-right:8px;">Global Base
+                                Rate:</label>
+                            <input type="number" id="globalBaseInput" value="100" class="matrix-input"
+                                oninput="updateGlobalBase(this.value)">
+                        </div>
                     </div>
                     <div style="overflow-x:auto;">
                         <table id="matrixVisualTable">

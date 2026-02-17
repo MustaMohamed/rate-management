@@ -30,6 +30,18 @@ function updateStats() {
     }
 }
 
+function updateDailyBase(dayIndex, val) {
+    store.days[dayIndex].baseRate = parseFloat(val) || 0;
+    saveStore();
+    renderMatrix();
+}
+
+function updateGlobalBase(val) {
+    const rate = parseFloat(val) || 0;
+    store.days.forEach(d => d.baseRate = rate);
+    saveStore();
+    renderMatrix();
+}
 
 function switchView(viewName, element) {
     // Update Sidebar
