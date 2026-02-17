@@ -23,6 +23,9 @@
             <div class="nav-item" onclick="switchView('matrix', this)">
                 <span class="nav-icon">📅</span> Rates Grid (Matrix)
             </div>
+            <div class="nav-item" onclick="switchView('policies', this)">
+                <span class="nav-icon">📜</span> Policies
+            </div>
         </nav>
     </div>
 
@@ -98,10 +101,11 @@
                     <table id="ratesTable">
                         <thead>
                             <tr>
-                                <th>Plan Code</th>
+                                <th>Code</th>
                                 <th>Name</th>
                                 <th>Type</th>
-                                <th>Derivation Rule</th>
+                                <th>Derivation</th>
+                                <th>Policy</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -122,6 +126,27 @@
                             <tbody id="suppMatrixBody"></tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- VIEW: POLICIES -->
+            <div id="view-policies" class="view-section">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">Cancellation Policies</div>
+                        <button class="btn btn-primary" onclick="openPolicyModal()">+ Add Policy</button>
+                    </div>
+                    <table id="policiesTable" style="width:100%; border-collapse:collapse; margin-top:8px;">
+                        <thead>
+                            <tr
+                                style="text-align:left; color:var(--text-muted); font-size:13px; border-bottom:1px solid var(--border);">
+                                <th style="padding:12px;">Name</th>
+                                <th style="padding:12px;">Description</th>
+                                <th style="padding:12px; width:100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="policiesTableBody"></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -200,6 +225,11 @@
                 </div>
 
                 <div class="form-group">
+                    <label class="form-label">Cancellation Policy</label>
+                    <select id="m_rate_policy" class="form-select"></select>
+                </div>
+
+                <div class="form-group">
                     <label class="form-label">Structure Type</label>
                     <select id="m_rate_type" class="form-select" onchange="toggleDerivationFields()">
                         <option value="source">Independent Data Source (Base)</option>
@@ -266,6 +296,42 @@
                     <button class="btn btn-outline" onclick="closeModal('suppModal')">Cancel</button>
                     <button class="btn btn-primary" onclick="saveSupplements()">Save Changes</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Policy Modal -->
+    <div id="policyModal" class="modal-overlay"
+        style="display:none; align-items:center; justify-content:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;">
+        <div class="modal" style="background:#fff; padding:24px; border-radius:8px; width:400px; max-width:90%;">
+            <div style="font-weight:700; font-size:16px; margin-bottom:16px;">Add/Edit Policy</div>
+
+            <input type="hidden" id="m_policy_id">
+
+            <div class="form-group" style="margin-bottom:12px;">
+                <label class="form-label"
+                    style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#475569;">Policy
+                    Name</label>
+                <input type="text" id="m_policy_name" class="form-input"
+                    style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"
+                    placeholder="e.g. Flexible 24h">
+            </div>
+
+            <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label"
+                    style="display:block; font-size:12px; font-weight:600; margin-bottom:4px; color:#475569;">Description</label>
+                <textarea id="m_policy_desc" class="form-input" rows="3"
+                    style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"
+                    placeholder="Description..."></textarea>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button class="btn btn-outline"
+                    style="padding:6px 12px; border:1px solid #cbd5e1; background:#fff; border-radius:4px; cursor:pointer;"
+                    onclick="closeModal('policyModal')">Cancel</button>
+                <button class="btn btn-primary"
+                    style="padding:6px 12px; background:var(--primary); color:#fff; border:none; border-radius:4px; cursor:pointer;"
+                    onclick="savePolicy()">Save Policy</button>
             </div>
         </div>
     </div>

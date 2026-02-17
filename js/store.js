@@ -72,7 +72,7 @@ const DEFAULT_STORE = {
     ],
     rates: [
         {
-            id: 'p1', code: 'BAR', name: 'Best Available Rate', type: 'source',
+            id: 'p1', code: 'BAR', name: 'Best Available Rate', type: 'source', policy: 'pol_flex',
             supplements: {
                 r2: { type: 'fixed', value: 10 },    // Standard View ($)
                 r3: { type: 'fixed', value: 30 },    // Superior ($)
@@ -82,8 +82,14 @@ const DEFAULT_STORE = {
                 r7: { type: 'fixed', value: 300 }    // Presidential ($)
             }
         },
-        { id: 'p2', code: 'NREF', name: 'Non-Refundable', type: 'derived', parent: 'p1', rule: 'percent', value: -10, supplements: {} },
-        { id: 'p3', code: 'PROMO', name: 'Summer Promo', type: 'derived', parent: 'p2', rule: 'percent', value: -5, supplements: {} }
+        { id: 'p2', code: 'NREF', name: 'Non-Refundable', type: 'derived', parent: 'p1', rule: 'percent', value: -10, policy: 'pol_nref', supplements: {} },
+        { id: 'p3', code: 'PROMO', name: 'Summer Promo', type: 'derived', parent: 'p2', rule: 'percent', value: -5, policy: 'pol_mod', supplements: {} }
+    ],
+    // Cancellation Policies
+    policies: [
+        { id: 'pol_flex', name: 'Flexible (1 Day)', description: 'Free cancel up to 24h before arrival' },
+        { id: 'pol_mod', name: 'Moderate (3 Days)', description: 'Free cancel up to 3 days before arrival' },
+        { id: 'pol_nref', name: 'Non-Refundable', description: 'No refund after booking' }
     ]
 };
 

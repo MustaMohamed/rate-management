@@ -49,8 +49,10 @@ function switchView(viewName, element) {
     if (element) {
         element.classList.add('active');
     } else {
-        const index = ['dashboard', 'rooms', 'rates', 'matrix'].indexOf(viewName);
-        if (index >= 0) document.querySelectorAll('.nav-item')[index].classList.add('active');
+        const map = { 'dashboard': 0, 'rooms': 1, 'rates': 2, 'matrix': 3, 'policies': 4 };
+        if (map[viewName] !== undefined) {
+            document.querySelectorAll('.nav-item')[map[viewName]].classList.add('active');
+        }
     }
 
     // Update user interface
@@ -63,9 +65,17 @@ function switchView(viewName, element) {
         rooms: 'Room Type Configuration',
         rates: 'Rate Plan Management',
         levels: 'Rate Level Ladder',
-        matrix: 'Rate Grid & Inventory'
+        matrix: 'Rate Matrix',
+        policies: 'Cancellation Policies'
     };
-    document.getElementById('pageTitle').innerText = titles[viewName] || 'Enterprise Rate Manager';
+    const titleEl = document.getElementById('pageTitle');
+    if (titleEl) titleEl.innerText = titles[viewName] || 'Overview';
+
+    // Refresh Data
+    if (viewName === 'matrix') renderMatrix();
+    if (viewName === 'rates') renderRatesTable();
+    if (viewName === 'rooms') renderRoomsTable();
+    if (viewName === 'policies' && typeof renderPoliciesTable === 'function') renderPoliciesTable();
 }
 
 /* --- ROOM MANAGMENT --- */
@@ -185,13 +195,22 @@ function renderRatesTable() {
 
         let typeLabel = rate.type === 'source' ? 'Source' : 'Derived';
 
+        // Policy Name
+        let polName = '-';
+        if (rate.policy) {
+            const p = (store.policies || []).find(x => x.id === rate.policy);
+            if (p) polName = p.name;
+        }
+
         tr.innerHTML = `
             <td><strong>${rate.code}</strong></td>
             <td>${rate.name}</td>
-            <td>${typeLabel}</td>
+            <td><span class="badge ${rate.type === 'source' ? 'badge-blue' : 'badge-gray'}">${typeLabel}</span></td>
             <td>${derivationInfo}</td>
+            <td>${polName}</td>
             <td>
-                <button class="btn btn-outline" style="padding:4px 8px; font-size:12px; color:var(--danger); border-color:var(--danger);" onclick="deleteRate(${idx})">Delete</button>
+                <button class="btn btn-sm btn-outline" style="font-size:10px; margin-right:4px;" onclick="openRateModal('${rate.id}')">Edit</button>
+                <button class="btn btn-sm btn-outline" style="font-size:10px; color:#ef4444; border-color:#fca5a5;" onclick="deleteRate(${idx})">Del</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -199,19 +218,50 @@ function renderRatesTable() {
     updateStats();
 }
 
-function openRateModal() {
+function openRateModal(rateId = null) {
+    document.getElementById('m_rate_id').value = rateId || '';
     document.getElementById('m_rate_name').value = '';
     document.getElementById('m_rate_code').value = '';
+    document.getElementById('m_rate_type').value = 'source'; // default
+
+    // Populate Policies
+    const polSel = document.getElementById('m_rate_policy');
+    polSel.innerHTML = '';
+    const policies = store.policies || [{ id: 'pol_flex', name: 'Default' }];
+    policies.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.text = p.name;
+        polSel.appendChild(opt);
+    });
 
     // Populate Parents
     const sel = document.getElementById('m_rate_parent');
     sel.innerHTML = '';
     store.rates.forEach(r => {
+        if (rateId && r.id === rateId) return; // Prevent self-parenting
         const opt = document.createElement('option');
         opt.value = r.id;
         opt.text = r.name;
         sel.appendChild(opt);
     });
+
+    // Edit Mode Pre-fill
+    if (rateId) {
+        const r = store.rates.find(x => x.id === rateId);
+        if (r) {
+            document.getElementById('m_rate_name').value = r.name;
+            document.getElementById('m_rate_code').value = r.code;
+            document.getElementById('m_rate_type').value = r.type;
+            if (r.policy) polSel.value = r.policy;
+
+            if (r.type === 'derived') {
+                if (r.parent) sel.value = r.parent;
+                if (r.rule) document.getElementById('m_rate_rule').value = r.rule;
+                if (r.value) document.getElementById('m_rate_val').value = r.value;
+            }
+        }
+    }
 
     toggleDerivationFields();
     document.getElementById('rateModal').style.display = 'flex';
@@ -223,30 +273,52 @@ function toggleDerivationFields() {
 }
 
 function saveRate() {
+    const id = document.getElementById('m_rate_id').value;
     const name = document.getElementById('m_rate_name').value;
     const code = document.getElementById('m_rate_code').value;
     const type = document.getElementById('m_rate_type').value;
+    const policy = document.getElementById('m_rate_policy').value;
 
     if (!name || !code) return;
 
-    const newRate = {
-        id: 'p' + Date.now(),
-        name,
-        code,
-        type,
-        supplements: {}
-    };
+    if (id) {
+        // Update Existing
+        const r = store.rates.find(x => x.id === id);
+        if (r) {
+            r.name = name;
+            r.code = code;
+            r.type = type;
+            r.policy = policy;
+            if (type === 'derived') {
+                r.parent = document.getElementById('m_rate_parent').value;
+                r.rule = document.getElementById('m_rate_rule').value;
+                r.value = parseFloat(document.getElementById('m_rate_val').value) || 0;
+            } else {
+                delete r.parent; delete r.rule; delete r.value;
+            }
+        }
+    } else {
+        // Create New
+        const newRate = {
+            id: 'p' + Date.now(),
+            name,
+            code,
+            type,
+            policy,
+            supplements: {}
+        };
 
-    if (type === 'derived') {
-        newRate.parent = document.getElementById('m_rate_parent').value;
-        newRate.rule = document.getElementById('m_rate_rule').value;
-        newRate.value = parseFloat(document.getElementById('m_rate_val').value) || 0;
+        if (type === 'derived') {
+            newRate.parent = document.getElementById('m_rate_parent').value;
+            newRate.rule = document.getElementById('m_rate_rule').value;
+            newRate.value = parseFloat(document.getElementById('m_rate_val').value) || 0;
+        }
+        store.rates.push(newRate);
     }
 
-    store.rates.push(newRate);
     saveStore();
     renderRatesTable();
-    renderSupplementMatrix(); // Update Grid
+    renderSupplementMatrix();
     renderMatrix();
     closeModal('rateModal');
 }
@@ -479,10 +551,82 @@ function renderMatrix() {
         let headerDetail = isExplicit ? 'Fixed Pricing Plan' : (isSource ? 'Source Plan' : 'Derived Plan');
         let headerColor = isExplicit ? '#4f46e5' : (isSource ? 'var(--primary)' : '#64748b');
 
-        tbody.innerHTML += `<tr style="background:#f1f5f9;"><td colspan="${store.days.length + 1}" style="font-size:12px; font-weight:bold; letter-spacing:0.5px; text-transform:uppercase; color:${headerColor}; padding-top:16px; border-bottom: 1px solid #e2e8f0;">
-            ${rate.name} <span style="font-weight:normal; opacity:0.7; font-size:11px; margin-left:8px;">(${headerDetail})</span>
-            <div style="font-size:10px; opacity:0.6; font-weight:normal;">${rate.code}</div>
+        // Policy Tag
+        let polTag = '';
+        if (rate.policy) {
+            const pol = (store.policies || []).find(p => p.id === rate.policy);
+            if (pol) {
+                polTag = `<span style="margin-left:8px; font-size:9px; background:#eef2ff; color:#4f46e5; padding:2px 6px; border-radius:4px; font-weight:600; text-transform:uppercase; border:1px solid #c7d2fe; letter-spacing:0.5px;">${pol.name}</span>`;
+            }
+        }
+
+        tbody.innerHTML += `<tr style="background:#f1f5f9;"><td colspan="${store.days.length + 1}" style="padding-top:16px; border-bottom: 1px solid #e2e8f0;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:12px; font-weight:bold; letter-spacing:0.5px; text-transform:uppercase; color:${headerColor}; display:flex; align-items:center;">
+                    ${rate.name} 
+                    <span style="font-weight:normal; opacity:0.7; font-size:11px; margin-left:8px;">(${headerDetail})</span>
+                    ${polTag}
+                </div>
+                <div style="font-size:10px; opacity:0.6; font-weight:normal;">${rate.code}</div>
+            </div>
         </td></tr>`;
+
+        // --- RESTRICTION ROWS ---
+        let resHtml = '';
+
+        // 1. RESTRICTIONS (Checkboxes & MinLOS)
+        resHtml += `<tr><td style="padding-left:12px; font-size:11px; font-weight:600; color:#475569; background:#fff1f2; border-bottom:1px solid #fecdd3; vertical-align:middle;">
+            <div>Restrictions</div>
+        </td>`;
+        store.days.forEach(day => {
+            const dateKey = day.date;
+            const rData = (rate.restrictions && rate.restrictions[dateKey]) || {};
+
+            const isStop = !!rData.stopSell;
+            const cta = !!rData.cta;
+            const ctd = !!rData.ctd;
+            const min = rData.minLos || 1;
+
+            const bg = isStop ? '#fecdd3' : '#fff';
+
+            // Checkbox styles
+            const cbStyle = "cursor:pointer; vertical-align:middle; margin:0 1px;";
+
+            resHtml += `<td style="text-align:center; background:${bg}; border-bottom:1px solid #fecdd3; padding:2px; vertical-align:middle;">
+                <div style="display:flex; flex-direction:column; gap:3px; align-items:flex-start; padding-left:2px;">
+                    
+                    <!-- Top Row: Stop Sell -->
+                    <label style="font-size:9px; font-weight:bold; color:#b91c1c; display:flex; align-items:center; gap:3px; cursor:pointer; width:100%;">
+                        <input type="checkbox" title="Stop Sell" ${isStop ? 'checked' : ''} onchange="updateRestriction('${rate.id}', '${dateKey}', 'stopSell', this.checked)" style="${cbStyle}">
+                        Stop Sell
+                    </label>
+
+                    <!-- Middle Row: CTA / CTD -->
+                    <div style="display:flex; flex-direction:column; gap:1px; width:100%; opacity:${isStop ? '0.5' : '1'}; pointer-events:${isStop ? 'none' : 'auto'};">
+                        <label title="Closed to Arrival" style="display:flex; align-items:center; gap:3px; font-size:9px; color:#c2410c; cursor:pointer;">
+                            <input type="checkbox" ${cta ? 'checked' : ''} onchange="updateRestriction('${rate.id}', '${dateKey}', 'cta', this.checked)" style="${cbStyle}" ${isStop ? 'disabled' : ''}>
+                            No Arrival
+                        </label>
+                        <label title="Closed to Departure" style="display:flex; align-items:center; gap:3px; font-size:9px; color:#c2410c; cursor:pointer;">
+                            <input type="checkbox" ${ctd ? 'checked' : ''} onchange="updateRestriction('${rate.id}', '${dateKey}', 'ctd', this.checked)" style="${cbStyle}" ${isStop ? 'disabled' : ''}>
+                            No Departure
+                        </label>
+                    </div>
+
+                    <!-- Bottom Row: Min Stay -->
+                    <div style="border-top:1px dotted #cbd5e1; padding-top:2px; width:100%; display:flex; align-items:center; gap:2px; opacity:${isStop ? '0.5' : '1'}; pointer-events:${isStop ? 'none' : 'auto'};">
+                         <span style="font-size:9px; color:#64748b; white-space:nowrap;">Min Stay:</span>
+                         <select onchange="updateRestriction('${rate.id}', '${dateKey}', 'minLos', this.value)" ${isStop ? 'disabled' : ''}
+                               style="width:100%; border:none; background:transparent; font-size:10px; text-align-last:left; cursor:pointer; font-weight:${min > 1 ? 'bold' : 'normal'}; color:${min > 1 ? '#b45309' : '#64748b'};">
+                           ${[1, 2, 3, 4, 5, 6, 7, 10, 14].map(v => `<option value="${v}" ${min == v ? 'selected' : ''}>${v}</option>`).join('')}
+                       </select>
+                    </div>
+                </div>
+            </td>`;
+        });
+        resHtml += '</tr>';
+
+        tbody.innerHTML += resHtml;
 
         // Loop Clusters
         const clusters = store.clusters || [{ id: 'c1', name: 'Default' }];
@@ -737,6 +881,131 @@ function resolveRatePrice(targetRate, anchorValue, allRates, room, date) {
         return parentPrice * (1 + (targetRate.value / 100));
     } else {
         return parentPrice + targetRate.value;
+    }
+}
+
+// --- RESTRICTION LOGIC ---
+function updateRestriction(rateId, date, field, val) {
+    const rate = store.rates.find(r => r.id === rateId);
+    if (!rate) return;
+    if (!rate.restrictions) rate.restrictions = {};
+    if (!rate.restrictions[date]) rate.restrictions[date] = {};
+
+    // Parse value based on field type
+    if (field === 'stopSell' || field === 'cta' || field === 'ctd') {
+        // Toggle boolean if it comes from checkbox onchange which sends 'true'/'false' or boolean
+        // Ideally we pass the checked state directly
+        rate.restrictions[date][field] = (val === true || val === 'true');
+    } else {
+        // LOS fields
+        const num = parseInt(val);
+        rate.restrictions[date][field] = isNaN(num) ? null : num;
+    }
+    saveStore();
+    renderMatrix(); // re-render to show updates
+}
+
+// --- POLICY LOGIC ---
+function updateRatePolicy(rateId, policyId) {
+    const rate = store.rates.find(r => r.id === rateId);
+    if (rate) {
+        rate.policy = policyId;
+        saveStore();
+    }
+}
+
+function updateRatePolicyDate(rateId, date, policyId) {
+    const rate = store.rates.find(r => r.id === rateId);
+    if (!rate) return;
+
+    if (!rate.policyOverrides) rate.policyOverrides = {};
+
+    if (policyId === '') {
+        delete rate.policyOverrides[date];
+    } else {
+        rate.policyOverrides[date] = policyId;
+    }
+    saveStore();
+    renderMatrix();
+}
+
+/* --- POLICY MANAGEMENT --- */
+function renderPoliciesTable() {
+    const tbody = document.getElementById('policiesTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    // Default if empty
+    if (!store.policies) store.policies = [
+        { id: 'pol_flex', name: 'Flexible (1 Day)', description: 'Free cancellation up to 1 day before arrival.' },
+        { id: 'pol_nref', name: 'Non-Refundable', description: 'No refund upon cancellation.' }
+    ];
+
+    store.policies.forEach((pol, idx) => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e2e8f0';
+        tr.innerHTML = `
+            <td style="padding:12px; font-weight:600; color:#334155;">${pol.name}</td>
+            <td style="padding:12px; color:#64748b; font-size:13px;">${pol.description || ''}</td>
+            <td style="padding:12px;">
+                <button class="btn btn-sm btn-outline" style="font-size:10px; margin-right:4px;" onclick="openPolicyModal('${pol.id}')">Edit</button>
+                <button class="btn btn-sm btn-outline" style="font-size:10px; color:#ef4444; border-color:#fca5a5;" onclick="deletePolicy(${idx})">Del</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function openPolicyModal(policyId = null) {
+    document.getElementById('m_policy_id').value = policyId || '';
+    document.getElementById('m_policy_name').value = '';
+    document.getElementById('m_policy_desc').value = '';
+
+    if (policyId) {
+        const p = store.policies.find(x => x.id === policyId);
+        if (p) {
+            document.getElementById('m_policy_name').value = p.name;
+            document.getElementById('m_policy_desc').value = p.description || '';
+        }
+    }
+    document.getElementById('policyModal').style.display = 'flex';
+}
+
+function savePolicy() {
+    const id = document.getElementById('m_policy_id').value;
+    const name = document.getElementById('m_policy_name').value;
+    const desc = document.getElementById('m_policy_desc').value;
+
+    if (!name) return;
+
+    if (!store.policies) store.policies = [];
+
+    if (id) {
+        const p = store.policies.find(x => x.id === id);
+        if (p) {
+            p.name = name;
+            p.description = desc;
+        }
+    } else {
+        store.policies.push({
+            id: 'pol_' + Date.now(),
+            name,
+            description: desc
+        });
+    }
+
+    saveStore();
+    renderPoliciesTable();
+    closeModal('policyModal');
+    // Also update modals that use policies if open? 
+    // Usually we reload, but just saving is enough.
+}
+
+function deletePolicy(idx) {
+    if (confirm('Delete this policy?')) {
+        store.policies.splice(idx, 1);
+        saveStore();
+        renderPoliciesTable();
     }
 }
 
