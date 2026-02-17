@@ -135,7 +135,7 @@ function initCalendarData() {
         const isWeekend = d.getDay() === 5 || d.getDay() === 6;
         store.days.push({
             date: dateStr,
-            baseRate: isWeekend ? 150 : 100
+            baseRate: 100
         });
     }
     saveStore();
