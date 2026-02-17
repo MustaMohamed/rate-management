@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Media Files
+*.mp4
+*.m4a
+*.mp3
+*.gif
+
+# Generated Scripts
+*.sh
+DEMO_SCRIPT_CLEAN.txt
+
+# System
+.DS_Store
